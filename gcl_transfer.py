@@ -19,8 +19,10 @@ import matplotlib.pyplot as plt
 
 from datasets.facebook_dataset import get_fb_dataset
 from datasets.ego_dataset import get_deezer
+from datasets.community_dataset import get_community_dataset
+from datasets.cora_dataset import get_cora_dataset
 
-from unsupervised.embedding_evaluation import EmbeddingEvaluation, PureEmbeddingEvaluation
+from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation
 from unsupervised.encoder import MoleculeEncoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
@@ -70,7 +72,14 @@ def get_dataloaders(dataset, batch_size, transforms):
     idxs = [data.get_idx_split() for data in datasets]
     datasets = [data[idxs[i]["train"]] for i, data in enumerate(datasets)]
 
-    return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] + [get_fb_dataset(batch_size, num = 2000), get_deezer(batch_size, num=2000)] , names +  ["Molesol (target)", "Facebook", "Egos"]
+    social_loaders = [get_fb_dataset(batch_size, num = 1000),
+                      get_deezer(batch_size, num=1000),
+                      get_community_dataset(batch_size, num = 1000),
+                      get_cora_dataset(batch_size, num = 1000)
+                      ]
+
+    return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
+           names +  ["Molesol (target)", "Facebook", "Egos", "Communities", "Cora"]
 
     # out = torch.utils.data.ConcatDataset([datasets])
     #
@@ -215,7 +224,7 @@ def run(args):
         #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
         #                          param_search=True)
     elif 'regression' in dataset.task_type:
-        ee = EmbeddingEvaluation(Ridge(fit_intercept=True, normalize=True, copy_X=True, max_iter=10000),
+        ee = EmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
                                  evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
                                  param_search=True)
         # ee = EmbeddingEvaluation(MLPRegressor(max_iter=2000),
@@ -224,11 +233,11 @@ def run(args):
     else:
         raise NotImplementedError
 
-    vis_ee = PureEmbeddingEvaluation()
+    general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
-    vis_ee.embedding_evaluation(model.encoder, dataloaders, names)
+    general_ee.embedding_evaluation(model.encoder, dataloaders, names)
     logging.info(
         "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
                                                                                          test_score))
@@ -280,7 +289,7 @@ def run(args):
             train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                          test_loader, vis=True)
 
-            vis_ee.embedding_evaluation(model.encoder, dataloaders, names)
+            general_ee.embedding_evaluation(model.encoder, dataloaders, names)
 
             wandb.log({"Train Score": train_score,
                        "Val Score": val_score,
@@ -307,7 +316,7 @@ def run(args):
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                  test_loader, vis = True)
 
-    vis_ee.embedding_evaluation(model.encoder, dataloaders, names)
+    general_ee.embedding_evaluation(model.encoder, dataloaders, names)
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))

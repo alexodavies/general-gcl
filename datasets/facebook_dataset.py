@@ -155,7 +155,7 @@ def ESWR(graph, n_graphs, size):
 def get_fb_dataset(batch_size, num = 2000):
     fb_graph = download_facebook()
     # print(fb_graph.nodes(data=True))
-    nx_graph_list = ESWR(fb_graph, num, 32)
+    nx_graph_list = ESWR(fb_graph, num, 48)
 
 
     loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],

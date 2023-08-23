@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -8,10 +9,69 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
 from umap import UMAP
 from torch_geometric.data import DataLoader
 import wandb
 
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=("black", "white"),
+                     threshold=None, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A pair of colors.  The first is used for values below a threshold,
+        the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+            texts.append(text)
+
+    return texts
 
 def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False):
 	x, y = encoder.get_embeddings(loader, device, is_rand_label)
@@ -186,12 +246,13 @@ class EmbeddingEvaluation():
 		return np.array(kf_train).mean(), np.array(kf_val).mean(), np.array(kf_test).mean()
 
 
-class PureEmbeddingEvaluation():
+class GeneralEmbeddingEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
 	def embedding_evaluation(self, encoder, loaders, names):
 		all_embeddings, separate_embeddings = self.get_embeddings(encoder, loaders)
+		self.centroid_similarities(separate_embeddings, names)
 		self.vis(all_embeddings, separate_embeddings, names)
 
 	def get_embeddings(self, encoder, loaders):
@@ -218,17 +279,7 @@ class PureEmbeddingEvaluation():
 		fig, ax = plt.subplots(figsize=(9, 9))
 
 		for i, emb in enumerate(separate_embeddings):
-
 			proj = embedder.transform(emb)
-
-
-
-		# ax.scatter(proj_train[:, 0], proj_train[:, 1], label="train", marker="x")
-		# ax.scatter(proj_val[:, 0], proj_val[:, 1], label="val", marker="+")
-		# ax.scatter(proj_test[:, 0], proj_test[:, 1], label="test", marker="*")
-
-		# name_conversion = {i:name for i, name in enumerate(names)}
-
 			ax.scatter(proj[:, 0], proj[:, 1], label=names[i], alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5)
 
 		ax.legend(shadow=True)
@@ -236,4 +287,43 @@ class PureEmbeddingEvaluation():
 		plt.savefig("outputs/embedding.png")
 		wandb.log({"Embedding": wandb.Image("outputs/embedding.png")})
 
+	def centroid_similarities(self, embeddings, names):
+		embed_dim = embeddings[0].shape[1]
+		centroids = np.zeros((len(embeddings), embed_dim))
+
+		for i, embedding in enumerate(embeddings):
+			centroids[i, :] = np.mean(embedding, axis = 0)
+
+		pairwise_similarities = cosine_similarity(centroids)
+		print(pairwise_similarities)
+
+		fig, ax = plt.subplots(figsize=(7,6))
+
+		im = ax.imshow(pairwise_similarities, cmap = "bone_r", vmin = 0, vmax = 1)
+
+		ax.set_xticks(np.arange(len(names)), labels = names)
+		ax.set_yticks(np.arange(len(names)), labels = names)
+
+		# for i1 in range(len(names)):
+		# 	for i2 in range(len(names)):
+		# 		text = ax.text(i2, i1, np.around(pairwise_similarities[i1, i2], decimals = 3),
+		# 					   ha="center", va="center", color="w")
+
+		annotate_heatmap(im, valfmt="{x:.3f}")
+
+		plt.savefig("outputs/pairwise-similarity.png")
+		wandb.log({"Pairwise Dataset Similarities": wandb.Image("outputs/pairwise-similarity.png")})
+
+
+		pairwise_sum = 0
+		for i1 in range(pairwise_similarities.shape[0]):
+			for i2 in range(pairwise_similarities.shape[1]):
+				if i2 <= i1:
+					pass
+				else:
+					pairwise_sum += pairwise_similarities[i1, i2]
+
+		mean_separation = pairwise_sum / ((pairwise_similarities.shape[0]**2)/2 - pairwise_similarities.shape[0])
+
+		wandb.log({"Mean Cosine Dataset Separation":mean_separation})
 	# plt.show()
