@@ -299,7 +299,7 @@ class GeneralEmbeddingEvaluation():
 
 		fig, ax = plt.subplots(figsize=(7,6))
 
-		im = ax.imshow(pairwise_similarities, cmap = "bone_r", vmin = 0, vmax = 1)
+		im = ax.imshow(pairwise_similarities, cmap = "bone_r", vmin = -1, vmax = 1)
 
 		ax.set_xticks(np.arange(len(names)), labels = names)
 		ax.set_yticks(np.arange(len(names)), labels = names)

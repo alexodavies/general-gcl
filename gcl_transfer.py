@@ -21,6 +21,7 @@ from datasets.facebook_dataset import get_fb_dataset
 from datasets.ego_dataset import get_deezer
 from datasets.community_dataset import get_community_dataset
 from datasets.cora_dataset import get_cora_dataset
+from datasets.random_dataset import get_random_dataset
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation
 from unsupervised.encoder import MoleculeEncoder
@@ -74,12 +75,13 @@ def get_dataloaders(dataset, batch_size, transforms):
 
     social_loaders = [get_fb_dataset(batch_size, num = 1000),
                       get_deezer(batch_size, num=1000),
+                      get_cora_dataset(batch_size, num=1000),
                       get_community_dataset(batch_size, num = 1000),
-                      get_cora_dataset(batch_size, num = 1000)
+                      get_random_dataset(batch_size, num = 1000)
                       ]
 
     return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-           names +  ["Molesol (target)", "Facebook", "Egos", "Communities", "Cora"]
+           names +  ["Molesol (target)", "Facebook", "Egos", "Cora", "Communities", "Random"]
 
     # out = torch.utils.data.ConcatDataset([datasets])
     #
