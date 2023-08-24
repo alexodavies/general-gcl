@@ -50,7 +50,7 @@ def download_cora(visualise = False):
 
     for node in list(G.nodes()):
         class_tensor = base_tensor
-        class_tensor[0] = node_classes[node]
+        class_tensor[node_classes[node]] = 1
 
         G.nodes[node]["attrs"] = class_tensor
 
