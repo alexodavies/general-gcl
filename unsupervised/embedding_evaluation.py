@@ -73,8 +73,8 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
     return texts
 
-def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False):
-	x, y = encoder.get_embeddings(loader, device, is_rand_label)
+def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every = 1):
+	x, y = encoder.get_embeddings(loader, device, is_rand_label, every = every)
 	if dtype == 'numpy':
 		return x,y
 	elif dtype == 'torch':
@@ -261,7 +261,7 @@ class GeneralEmbeddingEvaluation():
 		separate_embeddings = []
 		# colours = []
 		for i, loader in enumerate(loaders):
-			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False)
+			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False, every=5)
 			separate_embeddings.append(train_emb)
 			if all_embeddings is None:
 				all_embeddings = train_emb

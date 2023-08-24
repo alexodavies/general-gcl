@@ -78,11 +78,14 @@ class MoleculeEncoder(torch.nn.Module):
 		else:
 			raise NotImplementedError
 
-	def get_embeddings(self, loader, device, is_rand_label=False):
+	def get_embeddings(self, loader, device, is_rand_label=False, every = 1):
 		ret = []
 		y = []
 		with torch.no_grad():
-			for data in loader:
+			for i, data in enumerate(loader):
+				if i % every != 0:
+					continue
+
 				if isinstance(data, list):
 					data = data[0].to(device)
 				data = data.to(device)
