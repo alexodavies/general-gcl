@@ -74,7 +74,7 @@ def get_dataloaders(dataset, batch_size, transforms, num_social = 50000):
     datasets = [data[idxs[i]["train"]] for i, data in enumerate(datasets)]
 
     social_loaders = [get_fb_dataset(batch_size, num = num_social),
-                      get_deezer(batch_size, num=-1),
+                      get_deezer(batch_size, num=2 * num_social),
                       get_cora_dataset(batch_size, num=num_social)]#,
                       # get_community_dataset(batch_size, num = num_social),
                       # get_random_dataset(batch_size, num = num_social)
