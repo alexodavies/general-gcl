@@ -63,7 +63,7 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def get_dataloaders(dataset, batch_size, transforms, num_social = 20000):
+def get_dataloaders(dataset, batch_size, transforms, num_social = 50000):
     names = ["ogbg-molpcba"]
 
     if names == []:
