@@ -7,12 +7,12 @@ from tqdm import tqdm
 
 def get_random_graph(size = 48):
 
-    rho = 0.4 * np.random.random()
+    rho = 0.05 + 0.15 * np.random.random()
 
     base_tensor = torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0])
 
     G = nx.Graph()
-    for i in range(size):
+    for i in range(np.random.randint(low = 12, high=size)):
         G.add_node(i, attr = base_tensor)
 
 

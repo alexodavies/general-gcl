@@ -280,7 +280,9 @@ class GeneralEmbeddingEvaluation():
 
 		for i, emb in enumerate(separate_embeddings):
 			proj = embedder.transform(emb)
-			ax.scatter(proj[:, 0], proj[:, 1], label=names[i], alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5)
+			ax.scatter(proj[:, 0], proj[:, 1],
+					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
+					   label=f"{names[i]} - {proj.shape[0]} graphs")
 
 		ax.legend(shadow=True)
 
@@ -299,7 +301,7 @@ class GeneralEmbeddingEvaluation():
 
 		fig, ax = plt.subplots(figsize=(7,6))
 
-		im = ax.imshow(pairwise_similarities, cmap = "bone_r", vmin = -1, vmax = 1)
+		im = ax.imshow(pairwise_similarities, cmap = "binary", vmin = -1, vmax = 1)
 
 		ax.set_xticks(np.arange(len(names)), labels = names)
 		ax.set_yticks(np.arange(len(names)), labels = names)

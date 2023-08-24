@@ -63,8 +63,8 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def get_dataloaders(dataset, batch_size, transforms):
-    names = ["ogbg-molclintox"]# , "ogbg-molhiv"]# ["ogbg-molbace"]
+def get_dataloaders(dataset, batch_size, transforms, num_social = 8000):
+    names = ["ogbg-molclintox", "ogbg-molhiv"]# ["ogbg-molbace"]
 
     if names == []:
         return [DataLoader(dataset, batch_size=batch_size), get_fb_dataset(batch_size), get_deezer(batch_size, num=2000)], ["Molesol (target)", "Facebook", "Egos"]
@@ -73,15 +73,15 @@ def get_dataloaders(dataset, batch_size, transforms):
     idxs = [data.get_idx_split() for data in datasets]
     datasets = [data[idxs[i]["train"]] for i, data in enumerate(datasets)]
 
-    social_loaders = [get_fb_dataset(batch_size, num = 1000),
-                      get_deezer(batch_size, num=1000),
-                      get_cora_dataset(batch_size, num=1000),
-                      get_community_dataset(batch_size, num = 1000),
-                      get_random_dataset(batch_size, num = 1000)
-                      ]
+    social_loaders = [get_fb_dataset(batch_size, num = num_social),
+                      get_deezer(batch_size, num=num_social),
+                      get_cora_dataset(batch_size, num=num_social)]#,
+                      # get_community_dataset(batch_size, num = num_social),
+                      # get_random_dataset(batch_size, num = num_social)
+                      # ]
 
     return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-           names +  ["Molesol (target)", "Facebook", "Egos", "Cora", "Communities", "Random"]
+           names +  ["Molesol (target)", "Facebook", "Egos", "Cora"]#, "Communities", "Random"]
 
     # out = torch.utils.data.ConcatDataset([datasets])
     #
