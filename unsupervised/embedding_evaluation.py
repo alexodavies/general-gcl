@@ -272,14 +272,14 @@ class GeneralEmbeddingEvaluation():
 		return all_embeddings, separate_embeddings
 	def vis(self, all_embeddings, separate_embeddings, names):
 		# embedder = PCA(n_components=2).fit(embeddings)
-		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings)
+		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings[::10, :])
 		# proj_train, proj_val, proj_test = embedder.transform(train_emb), embedder.transform(
 		# 	val_emb), embedder.transform(test_emb)
 
 		fig, ax = plt.subplots(figsize=(9, 9))
 
 		for i, emb in enumerate(separate_embeddings):
-			proj = embedder.transform(emb)
+			proj = embedder.transform(emb[::10, :])
 			ax.scatter(proj[:, 0], proj[:, 1],
 					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
 					   label=f"{names[i]} - {proj.shape[0]} graphs")

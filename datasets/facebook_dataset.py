@@ -105,9 +105,9 @@ def download_facebook(visualise = False):
     print(np.unique(labels["page_type"]))
 
     conversion_dict = {"company":       torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]),
-                       "government":    torch.Tensor([0, 1, 0, 0, 0, 0, 0, 0, 0]),
-                       "politician":    torch.Tensor([0, 0, 1, 0, 0, 0, 0, 0, 0]),
-                       "tvshow":        torch.Tensor([0, 0, 0, 1, 0, 0, 0, 0, 0])}
+                       "government":    torch.Tensor([2, 0, 0, 0, 0, 0, 0, 0, 0]),
+                       "politician":    torch.Tensor([3, 0, 0, 0, 0, 0, 0, 0, 0]),
+                       "tvshow":        torch.Tensor([4, 0, 0, 0, 0, 0, 0, 0, 0])}
 
 
     graph = nx.Graph()
