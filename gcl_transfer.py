@@ -63,8 +63,8 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def get_dataloaders(dataset, batch_size, transforms, num_social = 8000):
-    names = ["ogbg-molclintox", "ogbg-molhiv"]# ["ogbg-molbace"]
+def get_dataloaders(dataset, batch_size, transforms, num_social = 20000):
+    names = ["ogbg-molpcba"]
 
     if names == []:
         return [DataLoader(dataset, batch_size=batch_size), get_fb_dataset(batch_size), get_deezer(batch_size, num=2000)], ["Molesol (target)", "Facebook", "Egos"]
@@ -74,7 +74,7 @@ def get_dataloaders(dataset, batch_size, transforms, num_social = 8000):
     datasets = [data[idxs[i]["train"]] for i, data in enumerate(datasets)]
 
     social_loaders = [get_fb_dataset(batch_size, num = num_social),
-                      get_deezer(batch_size, num=num_social),
+                      get_deezer(batch_size, num=-1),
                       get_cora_dataset(batch_size, num=num_social)]#,
                       # get_community_dataset(batch_size, num = num_social),
                       # get_random_dataset(batch_size, num = num_social)
