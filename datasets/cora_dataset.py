@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 import torch_geometric as pyg
+from torch_geometric.data import InMemoryDataset
 from torch_geometric.utils.convert import to_networkx
 from torch_geometric.io import read_npz
 import imageio
@@ -34,12 +35,6 @@ def download_cora(visualise = False):
         _ = wget.download(zip_url)
     else:
         os.chdir("cora")
-        # with zipfile.ZipFile("facebook_large.zip", 'r') as zip_ref:
-        #     zip_ref.extractall(".")
-        # os.remove("facebook_large.zip")
-    # os.chdir("facebook_large")
-
-    # edgelist = pd.read_csv("musae_facebook_edges.csv")
 
     edges = read_npz("cora_ml.npz")
     G = to_networkx(edges, to_undirected=True)
@@ -57,78 +52,70 @@ def download_cora(visualise = False):
     for edge in list(G.edges()):
         G.edges[edge]["attrs"] = torch.Tensor([1,0,0])
 
-    # labels = pd.read_csv("musae_facebook_target.csv")
-    # print(labels.head())
-    # print(np.unique(labels["page_type"]))
-    #
-    # conversion_dict = {"company":       torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]),
-    #                    "government":    torch.Tensor([2, 0, 0, 0, 0, 0, 0, 0, 0]),
-    #                    "politician":    torch.Tensor([3, 0, 0, 0, 0, 0, 0, 0, 0]),
-    #                    "tvshow":        torch.Tensor([4, 0, 0, 0, 0, 0, 0, 0, 0])}
-    #
-    #
-    # graph = nx.Graph()
-    # label_specific = labels["page_type"]
-    # for col in labels["id"]:
-    #     graph.add_node(int(col), attrs = conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
-    # # print(edgelist)
-    # sources = edgelist["id_1"].to_numpy().astype("int")
-    # targets = edgelist["id_2"].to_numpy().astype("int")
-    # #
-    # # for i in range(sources):
-    # #     source =
-    #
-    #
-    # for i in range(sources.shape[0]):
-    #     graph.add_edge(sources[i], targets[i], attr = torch.Tensor([1, 0, 0]))
-    #
-    # for node in list(graph.nodes(data=True)):
-    #     data = node[1]
-    #     if len(data) == 0:
-    #         graph.remove_node(node[0])
-    #
-    # graph = nx.convert_node_labels_to_integers(graph)
-    #
-    # CGs = [graph.subgraph(c) for c in nx.connected_components(graph)]
-    # CGs = sorted(CGs, key=lambda x: x.number_of_nodes(), reverse=True)
-    # graph = CGs[0]
-    # graph = nx.convert_node_labels_to_integers(graph)
-    # graph.remove_edges_from(nx.selfloop_edges(graph))
-    #
-    # with open("reddit-graph.npz", "wb") as f:
-    #     pickle.dump(graph, f)
-    #
-
     CGs = [G.subgraph(c) for c in nx.connected_components(G)]
     CGs = sorted(CGs, key=lambda x: x.number_of_nodes(), reverse=True)
     graph = CGs[0]
     graph = nx.convert_node_labels_to_integers(graph)
 
     os.chdir(start_dir)
-    # print(graph)
-    # # quit()
     return graph
 
 def ESWR(graph, n_graphs, size):
     print(f"Sampling {n_graphs} of size {size} from a {graph}")
     sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=size)
-    # sampler = ForestFireSampler(number_of_nodes=size)
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for _ in tqdm(range(n_graphs))]
 
     return graphs
 
-
-
-def get_cora_dataset(batch_size, num = 2000):
+def get_cora_dataset(num = 2000):
     fb_graph = download_cora()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
 
+    # loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],
+    #                                           batch_size=batch_size)
 
-    loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],
-                                              batch_size=batch_size)
+    data_objects = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list]
+    for data in data_objects:
+        data.y = None #torch.Tensor([[0,0]])
 
-    return loader
+    return  data_objects# loader
+
+class CoraDataset(InMemoryDataset):
+    def __init__(self, root, stage = "train", transform=None, pre_transform=None, pre_filter=None, num = 2000):
+        self.num = num
+        self.stage = stage
+        self.stage_to_index = {"train":0,
+                               "val":1,
+                               "test":2}
+        super().__init__(root, transform, pre_transform, pre_filter)
+        self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
+
+
+    @property
+    def raw_file_names(self):
+        return ['cora_ml.npz']
+
+    @property
+    def processed_file_names(self):
+        return ['train.pt',
+                'val.pt',
+                'test.pt']
+
+
+    def process(self):
+        # Read data into huge `Data` list.
+        data_list = get_cora_dataset(num=self.num)
+
+        if self.pre_filter is not None:
+            data_list = [data for data in data_list if self.pre_filter(data)]
+
+        if self.pre_transform is not None:
+            data_list = [self.pre_transform(data) for data in data_list]
+
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])
+
 
 if __name__ == "__main__":
     # fb_graph = download_cora()
@@ -136,4 +123,4 @@ if __name__ == "__main__":
     # graphs = ESWR(fb_graph, 200, 100)
     # G = download_cora()
     # print(G)
-    loader = get_cora_dataset(512, num = 200)
+    dataset = CoraDataset(os.getcwd()+'/original_datasets/'+'cora')

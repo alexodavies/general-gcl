@@ -88,6 +88,9 @@ class MoleculeEncoder(torch.nn.Module):
 
 				if isinstance(data, list):
 					data = data[0].to(device)
+				# elif isinstance(data, tuple):
+				# 	data = data[1].to(device)
+
 				data = data.to(device)
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
 				edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
