@@ -83,7 +83,7 @@ def download_facebook(visualise = False):
     zip_url = "https://snap.stanford.edu/data/facebook_large.zip"
 
     start_dir = os.getcwd()
-    print(os.getcwd(), os.listdir())
+    # print(os.getcwd(), os.listdir())
     os.chdir("original_datasets")
 
     if "facebook-graph.npz" in os.listdir():
@@ -91,8 +91,10 @@ def download_facebook(visualise = False):
             graph = pickle.load(f)
         os.chdir('../')
         return graph
+    # print(os.getcwd())
 
     if "facebook_large" not in os.listdir():
+        print("Downloading FB graph")
         _ = wget.download(zip_url)
         with zipfile.ZipFile("facebook_large.zip", 'r') as zip_ref:
             zip_ref.extractall(".")
@@ -102,8 +104,8 @@ def download_facebook(visualise = False):
     edgelist = pd.read_csv("musae_facebook_edges.csv")
 
     labels = pd.read_csv("musae_facebook_target.csv")
-    print(labels.head())
-    print(np.unique(labels["page_type"]))
+    # print(labels.head())
+    # print(np.unique(labels["page_type"]))
 
     conversion_dict = {"company":       torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]),
                        "government":    torch.Tensor([2, 0, 0, 0, 0, 0, 0, 0, 0]),
@@ -143,7 +145,7 @@ def download_facebook(visualise = False):
         pickle.dump(graph, f)
 
     os.chdir(start_dir)
-    print(graph)
+    # print(graph)
     # quit()
     return graph
 
@@ -174,6 +176,7 @@ class FacebookDataset(InMemoryDataset):
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
+        _ = download_facebook()
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 

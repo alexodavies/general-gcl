@@ -26,10 +26,11 @@ def download_cora(visualise = False):
     zip_url = "https://github.com/abojchevski/graph2gauss/raw/master/data/cora_ml.npz"
 
     start_dir = os.getcwd()
-    print(os.getcwd(), os.listdir())
+    # print(os.getcwd(), os.listdir())
     os.chdir("original_datasets")
 
     if "cora" not in os.listdir():
+        print("Downloading CORA")
         os.mkdir("cora")
         os.chdir("cora")
         _ = wget.download(zip_url)
@@ -61,7 +62,7 @@ def download_cora(visualise = False):
     return graph
 
 def ESWR(graph, n_graphs, size):
-    print(f"Sampling {n_graphs} of size {size} from a {graph}")
+    # print(f"Sampling {n_graphs} of size {size} from a {graph}")
     sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=size)
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for _ in tqdm(range(n_graphs))]
 
@@ -88,6 +89,7 @@ class CoraDataset(InMemoryDataset):
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
+        _ = download_cora()
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 

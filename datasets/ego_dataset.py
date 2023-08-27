@@ -24,11 +24,12 @@ def get_deezer(num = 49152):
     # zip_url = "https://snap.stanford.edu/data/deezer_ego_nets.zip"
     zip_url = "https://snap.stanford.edu/data/twitch_egos.zip"
     start_dir = os.getcwd()
-    print(os.getcwd(), os.listdir())
+    # print(os.getcwd(), os.listdir())
     os.chdir("original_datasets")
 
 
     if "twitch_egos" not in os.listdir():
+        print("Downloading Twitch Egos")
         _ = wget.download(zip_url)
         with zipfile.ZipFile("twitch_egos.zip", 'r') as zip_ref:
             zip_ref.extractall(".")
@@ -73,6 +74,7 @@ class EgoDataset(InMemoryDataset):
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
+        _ = get_deezer()
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 
