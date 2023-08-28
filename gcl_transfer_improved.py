@@ -143,7 +143,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 2000):
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
     split_idx = [data.get_idx_split() for data in datasets]
 
-    datasets = [data[split_idx[i]["val"]] for i, data in enumerate(datasets)]
+    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
 
     combined = dataset
 
