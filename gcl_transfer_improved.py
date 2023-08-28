@@ -383,7 +383,7 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
-        if epoch % 1 == 0:
+        if epoch % 5 == 0:
             model.eval()
             train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                          test_loader, vis=True)
