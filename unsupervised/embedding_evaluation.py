@@ -273,19 +273,34 @@ class GeneralEmbeddingEvaluation():
 		return all_embeddings, separate_embeddings
 	def vis(self, all_embeddings, separate_embeddings, names):
 		# embedder = PCA(n_components=2).fit(embeddings)
-		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings)
+
 		# proj_train, proj_val, proj_test = embedder.transform(train_emb), embedder.transform(
 		# 	val_emb), embedder.transform(test_emb)
 
-		fig, ax = plt.subplots(figsize=(9, 9))
+		fig, (ax1, ax2) = plt.subplots(figsize=(18, 9))
+
+		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings)
 
 		for i, emb in enumerate(separate_embeddings):
 			proj = embedder.transform(emb)
-			ax.scatter(proj[:, 0], proj[:, 1],
+			ax1.scatter(proj[:, 0], proj[:, 1],
 					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
 					   label=f"{names[i]} - {proj.shape[0]} graphs")
 
-		ax.legend(shadow=True)
+		ax1.legend(shadow=True)
+		ax1.set_title("UMAP Embedding")
+
+		embedder = PCA(n_components=2).fit(all_embeddings)
+
+
+		for i, emb in enumerate(separate_embeddings):
+			proj = embedder.transform(emb)
+			ax2.scatter(proj[:, 0], proj[:, 1],
+					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
+					   label=f"{names[i]} - {proj.shape[0]} graphs")
+
+		ax2.legend(shadow=True)
+		ax2.set_title("PCA Projection")
 
 		plt.savefig("outputs/embedding.png")
 		wandb.log({"Embedding": wandb.Image("outputs/embedding.png")})

@@ -145,6 +145,13 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
 
     datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
 
+    dataset_lengths = [len(data) for data in datasets]
+
+    for i, data in enumerate(datasets):
+        if dataset_lengths[i] > num_social:
+            datasets[i] = data[:num_social]
+
+
     combined = dataset
 
     for data in datasets:
