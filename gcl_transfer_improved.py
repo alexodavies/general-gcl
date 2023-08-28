@@ -79,6 +79,11 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+
+    split_idx = [data.get_idx_split() for data in datasets]
+
+    datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
+
     datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data) for i, data in enumerate(datasets)]
 
     combined = FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset)
@@ -132,10 +137,13 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
     #
     # return out
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 1000):
-    names = ["ogbg-molclintox"]
+def get_val_loaders(dataset, batch_size, transforms, num_social = 2000):
+    names = ["ogbg-molclintox", "ogbg-molpcba"]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+    split_idx = [data.get_idx_split() for data in datasets]
+
+    datasets = [data[split_idx[i]["val"]] for i, data in enumerate(datasets)]
 
     combined = dataset
 
