@@ -38,6 +38,10 @@ class FromOGBDataset(InMemoryDataset):
 
     def process(self):
         # Read data into huge `Data` list.
+
+        if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
+            print("OGB files exist")
+            return
         data_list = self.ogb_dataset# get_fb_dataset(num=self.num)
 
         new_data_list = []

@@ -107,6 +107,11 @@ class CoraDataset(InMemoryDataset):
 
     def process(self):
         # Read data into huge `Data` list.
+
+        if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
+            print("Cora files exist")
+            return
+
         data_list = get_cora_dataset(num=self.num)
 
         if self.pre_filter is not None:

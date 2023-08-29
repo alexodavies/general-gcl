@@ -185,6 +185,7 @@ class FacebookDataset(InMemoryDataset):
         return ['musae_facebook_edges.csv',
                 'musae_facebook_target.csv']
 
+
     @property
     def processed_file_names(self):
         return ['train.pt',
@@ -194,6 +195,11 @@ class FacebookDataset(InMemoryDataset):
 
     def process(self):
         # Read data into huge `Data` list.
+
+        if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
+            print("Facebook files exist")
+            return
+
         data_list = get_fb_dataset(num=self.num)
 
         if self.pre_filter is not None:
