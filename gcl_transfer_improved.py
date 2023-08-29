@@ -76,7 +76,7 @@ def from_ogb_dataset(dataset, target_y = torch.Tensor([[0,0]])):
     return
 
 def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
-    names = ["ogbg-molclintox"]#, "ogbg-molpcba"]
+    names = ["ogbg-molclintox", "ogbg-molpcba"]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
@@ -138,7 +138,7 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
     # return out
 
 def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
-    names = ["ogbg-molclintox"]#, "ogbg-molpcba"]
+    names = ["ogbg-molclintox", "ogbg-molpcba"]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
     split_idx = [data.get_idx_split() for data in datasets]
