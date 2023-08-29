@@ -277,7 +277,7 @@ class GeneralEmbeddingEvaluation():
 		# proj_train, proj_val, proj_test = embedder.transform(train_emb), embedder.transform(
 		# 	val_emb), embedder.transform(test_emb)
 
-		fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(18, 9))
+		fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(18, 9))
 
 		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings)
 
