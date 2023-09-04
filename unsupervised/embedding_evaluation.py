@@ -82,6 +82,155 @@ def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every
 	else:
 		raise NotImplementedError
 
+
+class DummyEmbeddingEvaluation():
+	def __init__(self, base_classifier, evaluator, task_type, num_tasks, device, params_dict=None, param_search=True,
+				 is_rand_label=False):
+		pass
+
+	def scorer(self, y_true, y_raw):
+		# input_dict = {"y_true": y_true, "y_pred": y_raw}
+		# score = self.evaluator.eval(input_dict)[self.eval_metric]
+		return torch.Tensor([0.])
+
+	def ee_binary_classification(self, train_emb, train_y, val_emb, val_y, test_emb, test_y):
+		# if self.param_search:
+		# 	params_dict = {'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+		# 	self.classifier = make_pipeline(StandardScaler(),
+		# 									GridSearchCV(self.base_classifier, params_dict, cv=5,
+		# 												 scoring=self.gscv_scoring_name, n_jobs=16, verbose=0)
+		# 									)
+		# else:
+		# 	self.classifier = make_pipeline(StandardScaler(), self.base_classifier)
+		#
+		# self.classifier.fit(train_emb, np.squeeze(train_y))
+		#
+		# if self.eval_metric == 'accuracy':
+		# 	train_raw = self.classifier.predict(train_emb)
+		# 	val_raw = self.classifier.predict(val_emb)
+		# 	test_raw = self.classifier.predict(test_emb)
+		# else:
+		# 	train_raw = self.classifier.predict_proba(train_emb)[:, 1]
+		# 	val_raw = self.classifier.predict_proba(val_emb)[:, 1]
+		# 	test_raw = self.classifier.predict_proba(test_emb)[:, 1]
+
+		return None, None, None
+
+	def ee_multioutput_binary_classification(self, train_emb, train_y, val_emb, val_y, test_emb, test_y):
+
+		# params_dict = {
+		# 	'multioutputclassifier__estimator__C': [1e-1, 1e0, 1e1, 1e2]}
+		# self.classifier = make_pipeline(StandardScaler(), MultiOutputClassifier(
+		# 	self.base_classifier, n_jobs=-1))
+		#
+		# if np.isnan(train_y).any():
+		# 	print("Has NaNs ... ignoring them")
+		# 	train_y = np.nan_to_num(train_y)
+		# self.classifier.fit(train_emb, train_y)
+		#
+		# train_raw = np.transpose([y_pred[:, 1] for y_pred in self.classifier.predict_proba(train_emb)])
+		# val_raw = np.transpose([y_pred[:, 1] for y_pred in self.classifier.predict_proba(val_emb)])
+		# test_raw = np.transpose([y_pred[:, 1] for y_pred in self.classifier.predict_proba(test_emb)])
+
+		return None, None, None #train_raw, val_raw, test_raw
+
+	def ee_regression(self, train_emb, train_y, val_emb, val_y, test_emb, test_y):
+		# if self.param_search:
+		# 	params_dict = {'alpha': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5]}
+		# 	# 			params_dict = {'alpha': [500, 50, 5, 0.5, 0.05, 0.005, 0.0005]}
+		# 	self.classifier = GridSearchCV(self.base_classifier, params_dict, cv=5,
+		# 								   scoring=self.gscv_scoring_name, n_jobs=16, verbose=0)
+		# else:
+		# 	self.classifier = self.base_classifier
+		#
+		# self.classifier.fit(train_emb, np.squeeze(train_y))
+		#
+		# train_raw = self.classifier.predict(train_emb)
+		# val_raw = self.classifier.predict(val_emb)
+		# test_raw = self.classifier.predict(test_emb)
+
+		return None, None, None # np.expand_dims(train_raw, axis=1), np.expand_dims(val_raw, axis=1), np.expand_dims(test_raw, axis=1)
+
+	def vis(self, train_emb, val_emb, test_emb):
+		embedder = PCA(n_components=2).fit(train_emb)
+		# embedder = UMAP(n_components=2, n_jobs=4).fit(train_emb)
+		proj_train, proj_val, proj_test = embedder.transform(train_emb), embedder.transform(
+			val_emb), embedder.transform(test_emb)
+
+		fig, ax = plt.subplots(figsize=(6, 6))
+
+		ax.scatter(proj_train[:, 0], proj_train[:, 1], label="train", marker="x")
+		ax.scatter(proj_val[:, 0], proj_val[:, 1], label="val", marker="+")
+		ax.scatter(proj_test[:, 0], proj_test[:, 1], label="test", marker="*")
+
+		ax.legend(shadow=True)
+
+		plt.savefig("outputs/embedding.png")
+		wandb.log({"Embedding": wandb.Image("outputs/embedding.png")})
+
+	# plt.show()
+
+	def embedding_evaluation(self, encoder, train_loader, valid_loader, test_loader, vis=False):
+		# encoder.eval()
+		# train_emb, train_y = get_emb_y(train_loader, encoder, self.device, is_rand_label=self.is_rand_label)
+		# val_emb, val_y = get_emb_y(valid_loader, encoder, self.device, is_rand_label=self.is_rand_label)
+		# test_emb, test_y = get_emb_y(test_loader, encoder, self.device, is_rand_label=self.is_rand_label)
+		#
+		# # if vis:
+		# # 	self.vis(train_emb, val_emb, test_emb)
+		#
+		# if 'classification' in self.task_type:
+		#
+		# 	if self.num_tasks == 1:
+		# 		train_raw, val_raw, test_raw = self.ee_binary_classification(train_emb, train_y, val_emb, val_y,
+		# 																	 test_emb,
+		# 																	 test_y)
+		# 	elif self.num_tasks > 1:
+		# 		train_raw, val_raw, test_raw = self.ee_multioutput_binary_classification(train_emb, train_y, val_emb,
+		# 																				 val_y,
+		# 																				 test_emb, test_y)
+		# 	else:
+		# 		raise NotImplementedError
+		# else:
+		# 	if self.num_tasks == 1:
+		# 		train_raw, val_raw, test_raw = self.ee_regression(train_emb, train_y, val_emb, val_y, test_emb, test_y)
+		# 	else:
+		# 		raise NotImplementedError
+		#
+		# train_score = self.scorer(train_y, train_raw)
+		#
+		# val_score = self.scorer(val_y, val_raw)
+		#
+		# test_score = self.scorer(test_y, test_raw)
+
+		return 0., 0., 0. # train_score, val_score, test_score
+
+	def kf_embedding_evaluation(self, encoder, dataset, folds=10, batch_size=128):
+		# kf_train = []
+		# kf_val = []
+		# kf_test = []
+		#
+		# kf = KFold(n_splits=folds, shuffle=True, random_state=None)
+		# for k_id, (train_val_index, test_index) in enumerate(kf.split(dataset)):
+		# 	test_dataset = [dataset[int(i)] for i in list(test_index)]
+		# 	train_index, val_index = train_test_split(train_val_index, test_size=0.2, random_state=None)
+		#
+		# 	train_dataset = [dataset[int(i)] for i in list(train_index)]
+		# 	val_dataset = [dataset[int(i)] for i in list(val_index)]
+		#
+		# 	train_loader = DataLoader(train_dataset, batch_size=batch_size)
+		# 	valid_loader = DataLoader(val_dataset, batch_size=batch_size)
+		# 	test_loader = DataLoader(test_dataset, batch_size=batch_size)
+		#
+		# 	train_score, val_score, test_score = self.embedding_evaluation(encoder, train_loader, valid_loader,
+		# 																   test_loader)
+		#
+		# 	kf_train.append(train_score)
+		# 	kf_val.append(val_score)
+		# 	kf_test.append(test_score)
+
+		return 0., 0., 0. # np.array(kf_train).mean(), np.array(kf_val).mean(), np.array(kf_test).mean()
+
 class EmbeddingEvaluation():
 	def __init__(self, base_classifier, evaluator, task_type, num_tasks, device, params_dict=None, param_search=True,is_rand_label=False):
 		self.is_rand_label = is_rand_label
@@ -262,6 +411,7 @@ class GeneralEmbeddingEvaluation():
 		# colours = []
 		for i, loader in enumerate(loaders):
 			# print(loader, encoder)
+			print(f"Loader {i}")
 			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False, every=1)
 			separate_embeddings.append(train_emb)
 			if all_embeddings is None:

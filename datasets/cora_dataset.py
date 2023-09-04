@@ -1,26 +1,42 @@
-import json
 import os
 import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 import torch
 from tqdm import tqdm
 import torch_geometric as pyg
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.utils.convert import to_networkx
 from torch_geometric.io import read_npz
-import imageio
-import wandb
 # import osmnx as ox
-from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler, DiffusionSampler, ForestFireSampler
-from sklearn.preprocessing import OneHotEncoder
+from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler
 # from ToyDatasets import *
-import pickle
-import zipfile
 import wget
-from networkx import community as comm
+# from utils import vis_from_pyg
+import matplotlib.pyplot as plt
+import numpy as np
 
+def vis_from_pyg(data, filename = None):
+    edges = data.edge_index.T.cpu().numpy()
+    labels = data.x[:,0].cpu().numpy()
+
+    g = nx.Graph()
+    g.add_edges_from(edges)
+
+    fig, ax = plt.subplots(figsize = (6,6))
+
+    pos = nx.kamada_kawai_layout(g)
+
+    nx.draw_networkx_edges(g, pos = pos, ax = ax)
+    nx.draw_networkx_nodes(g, pos = pos, node_color=labels, cmap="tab20",
+                           vmin = 0, vmax = 20, ax = ax)
+
+    ax.axis('off')
+
+    plt.tight_layout()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+        plt.close()
 
 def download_cora(visualise = False):
     zip_url = "https://github.com/abojchevski/graph2gauss/raw/master/data/cora_ml.npz"
@@ -40,13 +56,17 @@ def download_cora(visualise = False):
     edges = read_npz("cora_ml.npz")
     G = to_networkx(edges, to_undirected=True)
 
-    node_classes = {n: edges.y[i].item() for i, n in enumerate(list(G.nodes()))}
+    node_classes = {n: int(edges.y[i].item()) for i, n in enumerate(list(G.nodes()))}
 
-    base_tensor = torch.Tensor([0, 0, 0, 0, 0, 0, 0, 0, 0])
+    # print(node_classes)
+
+    # base_tensor = torch.Tensor([0])
 
     for node in list(G.nodes()):
-        class_tensor = base_tensor
-        class_tensor[0] = node_classes[node]
+        # class_tensor = base_tensor.clone()
+        class_tensor = torch.Tensor([node_classes[node]])#node_classes[node]
+
+        # print(class_tensor, node_classes[node])
 
         G.nodes[node]["attrs"] = class_tensor
 
@@ -63,7 +83,7 @@ def download_cora(visualise = False):
 
 def ESWR(graph, n_graphs, size):
     # print(f"Sampling {n_graphs} of size {size} from a {graph}")
-    sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=size)
+    sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for _ in tqdm(range(n_graphs))]
 
     return graphs
@@ -119,6 +139,10 @@ class CoraDataset(InMemoryDataset):
 
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
+
+        if self.stage != "train":
+            for i, data in enumerate(data_list):
+                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])

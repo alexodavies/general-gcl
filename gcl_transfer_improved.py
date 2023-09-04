@@ -25,7 +25,7 @@ from datasets.cora_dataset import get_cora_dataset, CoraDataset
 from datasets.random_dataset import get_random_dataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
-from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation
+from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
 from unsupervised.encoder import MoleculeEncoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
@@ -50,7 +50,7 @@ def setup_wandb(cfg):
     # config_dict = omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
 
     kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion'}
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', "mode":"offline"}
     wandb.init(**kwargs)
     wandb.save('*.txt')
 
@@ -75,9 +75,8 @@ def from_ogb_dataset(dataset, target_y = torch.Tensor([[0,0]])):
 
     return
 
-def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
+def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
-
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
     split_idx = [data.get_idx_split() for data in datasets]
@@ -90,32 +89,22 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
 
     for data in datasets:
         combined += data
-
-
-    for item in combined:
-        # print(item.y)
-        if item.y != None:
-            print(item)
-        # if item.y.shape[1] != 2:
-        #     print(item.y)
         #     item.y = torch.Tensor([[0,0]])
         #     print(item.y)
 
+    for item in combined:
+        if item.y is not None:
+            print(item)
+
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', num=num_social)),
-                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social)),
+                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social, stage="train")),
                        transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', num=num_social))]
 
     for data in social_datasets:
         combined += data
-
-    # for item in combined:
-    #     if item
-        # if item.y.shape[1] != 2:
-        #     print(item.y)
             # item.y = torch.Tensor([[0,0]])
 
-    # combined = transforms(combined)
-    print(combined)
+
 
 
     return DataLoader(combined, batch_size=batch_size, shuffle=True), "Dummy"
@@ -137,8 +126,21 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 50000):
     #
     # return out
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
+def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
+
+
+    # datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+
+    # split_idx = [data.get_idx_split() for data in datasets]
+
+    # datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
+
+    social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
+                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
+                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social))]
+
+
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
     split_idx = [data.get_idx_split() for data in datasets]
@@ -151,20 +153,22 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
         if dataset_lengths[i] > num_social:
             datasets[i] = data[:num_social]
 
+    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val") for i, data in enumerate(datasets)]
 
-    combined = dataset
+    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
 
-    for data in datasets:
-        combined += data
 
-    social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
-                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social))]
+    # combined = dataset
 
-    all_datasets = datasets + [dataset] + social_datasets
+    # for data in datasets:
+    #     combined += data
+
+
+
+    all_datasets = datasets + social_datasets
 
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-    print(datasets)
+    # print(datasets)
     # for data in social_datasets:
     #     combined += data
     #
@@ -189,6 +193,63 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
     # out = torch.utils.data.ConcatDataset([datasets])
     #
     # return out
+
+def get_evaluators(dataset, evaluator):
+
+    task_type = ""
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    for batch in dataset:
+        y = batch.y
+        # print(y)
+
+        if y is None:
+            task_type = "nodes"
+            print("Nodes")
+            break
+
+        else:
+            y = y[0]
+
+        if type(y) == int:
+            task_type = "graph-classification"
+            print("graph-classification")
+        elif type(y) == float:
+            task_type = "graph-regression"
+            print("graph-regression")
+        else:
+            task_type = "nodes"
+            print("Nodes")
+        break
+    try:
+        # if 'classification' in dataset.task_type:
+        if task_type == "graph-classification":
+            ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
+                                     evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
+                                     param_search=True)
+            # ee = EmbeddingEvaluation(MLPClassifier(max_iter=2000),
+            #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
+            #                          param_search=True)
+        elif task_type == "graph-regression":
+            ee = EmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
+                                     evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
+                                     param_search=True)
+            # ee = EmbeddingEvaluation(MLPRegressor(max_iter=2000),
+            #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
+            #                          param_search=True)
+        else:
+            ee = DummyEmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
+                                     evaluator, "", 0., device, params_dict=None,
+                                     param_search=True)
+    except:
+        ee = DummyEmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
+                                      evaluator, "", 0., device, params_dict=None,
+                                      param_search=True)
+    # else:
+    #     raise NotImplementedError
+
+    return ee
+
 
 def train_epoch(dataloader,
                 model, model_optimizer,
@@ -293,25 +354,8 @@ def run(args):
     test_loader = DataLoader(dataset[split_idx["test"]], batch_size=512, shuffle=False)
 
 
-    # big_dataset = get_big_dataset(dataset[split_idx["train"]], my_transforms)
-
     dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
     val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms)
-
-    # dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
-
-    # dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
-
-    # extra_dataset = PygGraphPropPredDataset(name="ogbg-molhiv", root='./original_datasets/', transform=my_transforms)
-    #
-    # extra_split_idx = extra_dataset.get_idx_split()
-    # extra_train_loader = DataLoader(extra_dataset[extra_split_idx["train"]], batch_size=512, shuffle=True)
-    # extra_valid_loader = DataLoader(extra_dataset[extra_split_idx["valid"]], batch_size=512, shuffle=False)
-    # extra_test_loader = DataLoader(extra_dataset[extra_split_idx["test"]], batch_size=512, shuffle=False)
-    #
-    # print(dataset[split_idx["train"]] + extra_dataset[extra_split_idx["train"]])
-    #
-    # extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True)
 
     model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                     proj_hidden_dim=args.emb_dim).to(device)
@@ -339,14 +383,17 @@ def run(args):
     else:
         raise NotImplementedError
 
+    evaluators = [ee] #[get_evaluators(dataset, evaluator) for dataset in val_loaders]
+
     general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
-    train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
     general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-    logging.info(
-        "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
-                                                                                         test_score))
+    for ee in evaluators:
+        train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
+        logging.info(
+            "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
+                                                                                             test_score))
 
 
     model_losses = []
@@ -392,14 +439,18 @@ def run(args):
 
         if epoch % 5 == 0:
             model.eval()
-            train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                         test_loader, vis=True)
-
+            total_val = 0.
+            total_train = 0.
             general_ee.embedding_evaluation(model.encoder, val_loaders, names)
+            for ee in evaluators:
+                train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
+                                                                             test_loader, vis=True)
+                total_val += val_score
+                total_train += train_score
 
-            wandb.log({"Train Score": train_score,
-                       "Val Score": val_score,
-                       "Test Score": test_curve})
+
+            wandb.log({"Train Score": total_train,
+                       "Val Score": total_val})
 
         # logging.info(
         #     "Metric: {} Train: {} Val: {} Test: {}".format(evaluator.eval_metric, train_score, val_score, test_score))
@@ -408,7 +459,7 @@ def run(args):
             valid_curve.append(val_score)
             test_curve.append(test_score)
 
-            if val_score <= best_val:
+            if total_val <= best_val:
                 best_val = val_score
                 torch.save({
                     'epoch': epoch,
@@ -463,13 +514,13 @@ def arg_parse():
                         help='GNN Pooling Type Standard/Layerwise')
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
-    parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=128,
                         help='embedding dimension')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
-    parser.add_argument('--drop_ratio', type=float, default=0.0,
+    parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=50,
+    parser.add_argument('--epochs', type=int, default=5000,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
 

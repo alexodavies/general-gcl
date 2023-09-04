@@ -1,29 +1,54 @@
-import json
 import os
+import torch
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import torch
-from tqdm import tqdm
-import torch_geometric as pyg
 from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.utils.convert import to_networkx
-import imageio
-import wandb
-# import osmnx as ox
-from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler
-from sklearn.preprocessing import OneHotEncoder
-# from ToyDatasets import *
-import pickle
-import zipfile
-import wget
-from networkx import community as comm
 
+
+# import osmnx as ox
+# from ToyDatasets import *
+
+
+def vis_from_pyg(data, filename = None):
+    edges = data.edge_index.T.cpu().numpy()
+    labels = data.x[:,0].cpu().numpy().astype(int)
+
+    g = nx.Graph()
+    g.add_edges_from(edges)
+
+    fig, ax = plt.subplots(figsize = (6,6))
+
+    pos = nx.kamada_kawai_layout(g)
+
+    nx.draw_networkx_edges(g, pos = pos, ax = ax)
+    try:
+        if labels.shape[0] > g.order():
+            ax.set_title("Labels may be incorrect")
+            labels = labels[:g.order()]
+        nx.draw_networkx_nodes(g, pos = pos, node_color=labels, cmap="tab20",
+                            vmin = 0, vmax = 20, ax = ax)
+    except:
+        print(labels, labels.shape, edges, np.unique(edges), g)
+        quit()
+
+    ax.axis('off')
+
+    plt.tight_layout()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+        plt.close()
 
 class FromOGBDataset(InMemoryDataset):
-    def __init__(self, root, ogb_dataset, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, ogb_dataset, stage = "train", transform=None, pre_transform=None, pre_filter=None):
         self.ogb_dataset = ogb_dataset
+        self.stage = stage
+        self.stage_to_index = {"train":0,
+                               "val":1,
+                               "test":2}
+        print(f"Converting OGB stage {self.stage}")
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
@@ -33,22 +58,43 @@ class FromOGBDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['data.pt']
+        return ['train.pt',
+                'val.pt',
+                'test.pt']
 
 
     def process(self):
         # Read data into huge `Data` list.
-
+        print(f"Looking for OGB processed files at {self.processed_paths[self.stage_to_index[self.stage]]}")
         if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
-            print("OGB files exist")
+            print(f"OGB files exist at {self.processed_paths[self.stage_to_index[self.stage]]}")
             return
         data_list = self.ogb_dataset# get_fb_dataset(num=self.num)
+        if self.stage == "train":
+            print("Found stage train, dropping targets")
+            new_data_list = []
+            for i, item in enumerate(data_list):
 
-        new_data_list = []
-        for item in data_list:
-            data = Data(x = item.x, edge_index=item.edge_index,
-                        edge_attr=item.edge_attr, y = None)
-            new_data_list.append(data)
+                data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                            edge_attr=item.edge_attr, y = None)
+                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+        else:
+            new_data_list = []
+            for i, item in enumerate(data_list):
+
+                data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                            edge_attr=item.edge_attr, y = item.y)
+                # print(f"Val x shape {data.x.shape}, edge index {data.edge_index.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+            for i, data in enumerate(data_list):
+                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -56,8 +102,8 @@ class FromOGBDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
-        data, slices = self.collate(new_data_list)
-        torch.save((data, slices), self.processed_paths[0])
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])
 
 
 if __name__ == "__main__":

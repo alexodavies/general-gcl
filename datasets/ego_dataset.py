@@ -1,27 +1,46 @@
 import json
 import os
 import networkx as nx
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from tqdm import tqdm
 import torch_geometric as pyg
 from torch_geometric.data import InMemoryDataset
-from torch_geometric.utils.convert import to_networkx
-import imageio
-import wandb
 # import osmnx as ox
-from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler
-from sklearn.preprocessing import OneHotEncoder
 # from ToyDatasets import *
-import pickle
 import zipfile
 import wget
-from networkx import community as comm
+# from utils import vis_from_pyg
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-def get_deezer(num = 49152):
+def vis_from_pyg(data, filename = None):
+    edges = data.edge_index.T.cpu().numpy()
+    labels = data.x[:,0].cpu().numpy()
+
+    g = nx.Graph()
+    g.add_edges_from(edges)
+
+    fig, ax = plt.subplots(figsize = (6,6))
+
+    pos = nx.kamada_kawai_layout(g)
+
+    nx.draw_networkx_edges(g, pos = pos, ax = ax)
+    nx.draw_networkx_nodes(g, pos = pos, node_color=labels, cmap="tab20",
+                           vmin = 0, vmax = 20, ax = ax)
+
+    ax.axis('off')
+
+    plt.tight_layout()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+        plt.close()
+
+def get_deezer(num = 49152, include_targets = False):
     # zip_url = "https://snap.stanford.edu/data/deezer_ego_nets.zip"
+    print("Processing twitch egos dataset")
     zip_url = "https://snap.stanford.edu/data/twitch_egos.zip"
     start_dir = os.getcwd()
     # print(os.getcwd(), os.listdir())
@@ -39,11 +58,19 @@ def get_deezer(num = 49152):
 
     with open("twitch_edges.json", "r") as f:
         all_edges = json.load(f)
+
+    if include_targets:
+        twitch_targets = pd.read_csv("twitch_target.csv")
+        ids, targets = twitch_targets["id"], twitch_targets["target"]
+        id_to_target = {ids[i]:targets[i] for i in range(len(ids))}
+
+
     graph_ids = list(all_edges.keys())
 
     graphs = []
 
-    for id in graph_ids[:num]:
+    print("Entering ego processing loop")
+    for id in tqdm(graph_ids[:num], leave = False):
         edges = all_edges[id]
 
         g = nx.Graph()
@@ -51,7 +78,7 @@ def get_deezer(num = 49152):
         nodes = np.unique(edges).tolist()
 
         for node in nodes:
-            g.add_node(node, attr = torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]))
+            g.add_node(node, attr = torch.Tensor([1])) #, 0, 0, 0, 0, 0, 0, 0, 0]))
 
         for edge in edges:
             g.add_edge(edge[0], edge[1], attr=torch.Tensor([1, 0, 0]))
@@ -62,8 +89,16 @@ def get_deezer(num = 49152):
     os.chdir(start_dir)
     # return loader
     data_objects = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in graphs]
+
+
     for data in data_objects:
-        data.y = None # torch.Tensor([[0,0]])
+        print(data.x.shape, data.edge_index.shape)
+
+    for id, data in enumerate(data_objects):
+        if include_targets:
+            data.y = id_to_target[id]
+        else:
+            data.y = None # torch.Tensor([[0,0]])
 
     return  data_objects# loader
 
@@ -74,7 +109,7 @@ class EgoDataset(InMemoryDataset):
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
-        _ = get_deezer()
+        _ = get_deezer(num = 1)
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 
@@ -96,14 +131,18 @@ class EgoDataset(InMemoryDataset):
         if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
             print("Ego files exist")
             return
-
-        data_list = get_deezer(num=self.num)
+        print(f"Aiming for {self.num} graphs")
+        data_list = get_deezer(num=self.num, include_targets = self.stage != "train")
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
 
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
+
+        if self.stage != "train":
+            for i, data in enumerate(data_list):
+                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])

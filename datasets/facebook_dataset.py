@@ -1,24 +1,45 @@
-import json
 import os
 import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import torch
 from tqdm import tqdm
 import torch_geometric as pyg
 from torch_geometric.data import InMemoryDataset
-from torch_geometric.utils.convert import to_networkx
-import imageio
-import wandb
 # import osmnx as ox
 from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler
-from sklearn.preprocessing import OneHotEncoder
 # from ToyDatasets import *
 import pickle
 import zipfile
 import wget
-from networkx import community as comm
+import matplotlib.pyplot as plt
+import numpy as np
+
+print(os.getcwd())
+# from utils import vis_from_pyg
+
+def vis_from_pyg(data, filename = None):
+    edges = data.edge_index.T.cpu().numpy()
+    labels = data.x[:,0].cpu().numpy()
+
+    g = nx.Graph()
+    g.add_edges_from(edges)
+
+    fig, ax = plt.subplots(figsize = (6,6))
+
+    pos = nx.kamada_kawai_layout(g)
+
+    nx.draw_networkx_edges(g, pos = pos, ax = ax)
+    nx.draw_networkx_nodes(g, pos = pos, node_color=labels, cmap="tab20",
+                           vmin = 0, vmax = 20, ax = ax)
+
+    ax.axis('off')
+
+    plt.tight_layout()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+        plt.close()
 
 def download_reddit(visualise = False):
     graph_url = "https://snap.stanford.edu/data/soc-redditHyperlinks-title.tsv"
@@ -107,10 +128,10 @@ def download_facebook(visualise = False):
     # print(labels.head())
     # print(np.unique(labels["page_type"]))
 
-    conversion_dict = {"company":       torch.Tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]),
-                       "government":    torch.Tensor([2, 0, 0, 0, 0, 0, 0, 0, 0]),
-                       "politician":    torch.Tensor([3, 0, 0, 0, 0, 0, 0, 0, 0]),
-                       "tvshow":        torch.Tensor([4, 0, 0, 0, 0, 0, 0, 0, 0])}
+    conversion_dict = {"company":       torch.Tensor([1]), #, 0, 0, 0, 0, 0, 0, 0, 0]),
+                       "government":    torch.Tensor([2]), #, 0, 0, 0, 0, 0, 0, 0, 0]),
+                       "politician":    torch.Tensor([3]), #, 0, 0, 0, 0, 0, 0, 0, 0]),
+                       "tvshow":        torch.Tensor([4])} #, 0, 0, 0, 0, 0, 0, 0, 0]),
 
 
     graph = nx.Graph()
@@ -134,6 +155,7 @@ def download_facebook(visualise = False):
             graph.remove_node(node[0])
 
     graph = nx.convert_node_labels_to_integers(graph)
+    print(f"Facebook {graph}")
 
     CGs = [graph.subgraph(c) for c in nx.connected_components(graph)]
     CGs = sorted(CGs, key=lambda x: x.number_of_nodes(), reverse=True)
@@ -150,7 +172,7 @@ def download_facebook(visualise = False):
     return graph
 
 def ESWR(graph, n_graphs, size):
-    sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=size)
+    sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for _ in tqdm(range(n_graphs), leave=False)]
 
     return graphs
@@ -164,10 +186,13 @@ def get_fb_dataset(num = 2000):
     # loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],
     #                                           batch_size=batch_size)
     data_objects = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list]
+
+
+
     for data in data_objects:
         data.y = None # torch.Tensor([[0,0]])
 
-    return  data_objects# loader
+    return data_objects# loader
 
 class FacebookDataset(InMemoryDataset):
     def __init__(self, root, stage="train", transform=None, pre_transform=None, pre_filter=None, num = 2000):
@@ -208,6 +233,10 @@ class FacebookDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
+        if self.stage != "train":
+            for i, data in enumerate(data_list):
+                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
+
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])
 
@@ -218,4 +247,5 @@ if __name__ == "__main__":
     # graphs = ESWR(fb_graph, 200, 100)
     # G = download_cora()
     # print(G)
-    dataset = FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large')
+    os.chdir('../')
+    dataset = FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val")
