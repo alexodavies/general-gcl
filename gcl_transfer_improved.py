@@ -50,7 +50,7 @@ def setup_wandb(cfg):
     # config_dict = omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
 
     kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', "mode":"offline"}
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
 
