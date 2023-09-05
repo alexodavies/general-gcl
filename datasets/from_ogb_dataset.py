@@ -4,6 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 from torch_geometric.data import InMemoryDataset, Data
+from tqdm import tqdm
 
 
 # import osmnx as ox
@@ -101,7 +102,7 @@ class FromOGBDataset(InMemoryDataset):
                 # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
                 new_data_list.append(data)
             data_list = new_data_list
-            for i, data in enumerate(data_list):
+            for i, data in enumerate(tqdm(data_list)):
                 vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         if self.pre_filter is not None:
