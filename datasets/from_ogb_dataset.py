@@ -50,7 +50,7 @@ class FromOGBDataset(InMemoryDataset):
                                "test":2}
         print(f"Converting OGB stage {self.stage}")
         super().__init__(root, transform, pre_transform, pre_filter)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 
     @property
     def raw_file_names(self):
