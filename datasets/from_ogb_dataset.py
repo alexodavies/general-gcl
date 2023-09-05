@@ -42,12 +42,13 @@ def vis_from_pyg(data, filename = None):
         plt.close()
 
 class FromOGBDataset(InMemoryDataset):
-    def __init__(self, root, ogb_dataset, stage = "train", transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, ogb_dataset, stage = "train", num = -1, transform=None, pre_transform=None, pre_filter=None):
         self.ogb_dataset = ogb_dataset
         self.stage = stage
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
+        self.num = num
         print(f"Converting OGB stage {self.stage}")
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
@@ -70,10 +71,17 @@ class FromOGBDataset(InMemoryDataset):
             print(f"OGB files exist at {self.processed_paths[self.stage_to_index[self.stage]]}")
             return
         data_list = self.ogb_dataset# get_fb_dataset(num=self.num)
+
+        num_samples = len(data_list)
+        if num_samples < self.num:
+            keep_n = num_samples
+        else:
+            keep_n = self.num
+
         if self.stage == "train":
             print("Found stage train, dropping targets")
             new_data_list = []
-            for i, item in enumerate(data_list):
+            for i, item in enumerate(data_list[:keep_n]):
 
                 data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
                             edge_attr=item.edge_attr, y = None)
@@ -84,7 +92,7 @@ class FromOGBDataset(InMemoryDataset):
             data_list = new_data_list
         else:
             new_data_list = []
-            for i, item in enumerate(data_list):
+            for i, item in enumerate(data_list[:keep_n]):
 
                 data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
                             edge_attr=item.edge_attr, y = item.y)
