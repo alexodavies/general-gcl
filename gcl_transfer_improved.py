@@ -153,7 +153,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
         if dataset_lengths[i] > num_social:
             datasets[i] = data[:num_social]
 
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val") for i, data in enumerate(datasets)]
+    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val", num=num_social) for i, data in enumerate(datasets)]
 
     datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
 
