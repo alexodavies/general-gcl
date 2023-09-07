@@ -94,7 +94,7 @@ class MoleculeEncoder(torch.nn.Module):
 				data = data.to(device)
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
 
-				print(edge_index.max(), x.shape)
+				# print(edge_index.max(), x.shape)
 
 				edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
 

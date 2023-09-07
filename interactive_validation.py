@@ -18,7 +18,7 @@ from torch_geometric.transforms import Compose
 from torch_scatter import scatter
 import matplotlib.pyplot as plt
 
-from datasets.facebook_dataset import get_fb_dataset, FacebookDataset
+from datasets.facebook_dataset import get_fb_dataset, FacebookDataset, vis_from_pyg
 from datasets.ego_dataset import get_deezer, EgoDataset
 from datasets.community_dataset import get_community_dataset
 from datasets.cora_dataset import get_cora_dataset, CoraDataset
@@ -30,6 +30,15 @@ from unsupervised.encoder import MoleculeEncoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
+
+from umap import UMAP
+from sklearn.decomposition import PCA
+import glob
+from bokeh.plotting import figure, output_file, show, ColumnDataSource
+from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d
+from bokeh.palettes import d3
+import bokeh.models as bmo
+
 
 
 def warn(*args, **kwargs):
@@ -50,7 +59,7 @@ def setup_wandb(cfg):
     # config_dict = omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
 
     kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion'}
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
 
@@ -76,7 +85,7 @@ def from_ogb_dataset(dataset, target_y = torch.Tensor([[0,0]])):
     return
 
 def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
-    names = ["ogbg-molclintox", "ogbg-molpcba"]
+    names = ["ogbg-molclintox"]
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
     split_idx = [data.get_idx_split() for data in datasets]
@@ -175,7 +184,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
     # # combined = transforms(combined)
     # print(combined)
 
-    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora"]
+    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora"]
 
     #
     # datasets = datasets + [get_fb_dataset(num = num_social),
@@ -250,90 +259,70 @@ def get_evaluators(dataset, evaluator):
 
     return ee
 
-
-def train_epoch(dataloader,
-                model, model_optimizer,
-                view_learner, view_optimizer,
-                model_loss_all, view_loss_all, reg_all):
-
+def vis_views(view_learner, loader, dataset_name, num = 10000):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    for batch in tqdm(dataloader, leave = False):
-        # set up
-        batch = batch.to(device)
+    view_data = []
 
-        # train view to maximize contrastive loss
-        view_learner.train()
-        view_learner.zero_grad()
-        model.eval()
+    view_learner.eval()
+    with torch.no_grad():
+        for batch in loader:
+            # print(ibatch, ibatch.ptr, ibatch.ptr.shape, ibatch.num_graphs, ibatch.edge_index)
+            # if len(view_data) > num:
+            #     break
+            edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
 
-        x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
+            temperature = 1.0
+            bias = 0.0 + 0.0001  # If bias is 0, we run into problems
+            eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
+            gate_inputs = torch.log(eps) - torch.log(1 - eps)
+            gate_inputs = gate_inputs.to(device)
+            gate_inputs = (gate_inputs + edge_logits) / temperature
+            batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze()
 
-        edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
+            kept = torch.bernoulli(batch_aug_edge_weight).to(torch.bool)
+            print(f"Dropped {kept.shape[0] - torch.sum(kept)} edges out of {kept.shape[0]}")
 
-        temperature = 1.0
-        bias = 0.0 + 0.0001  # If bias is 0, we run into problems
-        eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
-        gate_inputs = torch.log(eps) - torch.log(1 - eps)
-        gate_inputs = gate_inputs.to(device)
-        gate_inputs = (gate_inputs + edge_logits) / temperature
-        batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze()
 
-        x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
+            # Kept is a boolean array of whether an edge is kept after the view
 
-        # regularization
+            datalist = batch.to_data_list()
+            new_datalist = []
+            edges_so_far = 0
+            for idata, data in enumerate(datalist):
 
-        row, col = batch.edge_index
-        edge_batch = batch.batch[row]
-        edge_drop_out_prob = 1 - batch_aug_edge_weight
+                dropped_slice = kept[edges_so_far:edges_so_far + data.num_edges]
+                # print(data.edge_index)
+                new_edges = data.edge_index[:,dropped_slice]
+                # print(data.edge_index)
+                edges_so_far += data.num_edges
 
-        uni, edge_batch_num = edge_batch.unique(return_counts=True)
-        sum_pe = scatter(edge_drop_out_prob, edge_batch, reduce="sum")
 
-        reg = []
-        for b_id in range(args.batch_size):
-            if b_id in uni:
-                num_edges = edge_batch_num[uni.tolist().index(b_id)]
-                reg.append(sum_pe[b_id] / num_edges)
-            else:
-                # means no edges in that graph. So don't include.
-                pass
-        num_graph_with_edges = len(reg)
-        reg = torch.stack(reg)
-        reg = reg.mean()
+                data.edge_index = new_edges
+                datalist[idata] = data
 
-        view_loss = model.calc_loss(x, x_aug) - (args.reg_lambda * reg)
-        view_loss_all += view_loss.item() * batch.num_graphs
-        reg_all += reg.item()
-        # gradient ascent formulation
-        (-view_loss).backward()
-        view_optimizer.step()
+            view_data += datalist
 
-        # train (model) to minimize contrastive loss
-        model.train()
-        view_learner.eval()
-        model.zero_grad()
 
-        x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
-        edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
 
-        temperature = 1.0
-        bias = 0.0 + 0.0001  # If bias is 0, we run into problems
-        eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
-        gate_inputs = torch.log(eps) - torch.log(1 - eps)
-        gate_inputs = gate_inputs.to(device)
-        gate_inputs = (gate_inputs + edge_logits) / temperature
-        batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze().detach()
+    data_directory = os.getcwd() + '/original_datasets/' + dataset_name
 
-        x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
+    if "views" not in os.listdir(data_directory):
+        print(f"Making {os.getcwd() + '/original_datasets/' + dataset_name + '/views'}")
+        os.mkdir(os.getcwd() + '/original_datasets/' + dataset_name + '/views')
 
-        model_loss = model.calc_loss(x, x_aug)
-        model_loss_all += model_loss.item() * batch.num_graphs
+    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
+    for i, data in enumerate(tqdm(view_data)):
+        filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/views/view-{i}.png'
+        if f"view-{i}.png" in existing_files or i >= num:
+            print(f"{filename} already exists")
+            pass
+        else:
+            vis_from_pyg(data, filename=filename)
 
-        # standard gradient descent formulation
-        model_loss.backward()
-        model_optimizer.step()
 
-    return model_loss_all, view_loss_all, reg_all
+        # x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
+
+
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -343,28 +332,44 @@ def run(args):
     logging.info(args)
     setup_seed(args.seed)
 
+    num = args.num
+    redo_views = args.redo_views
+
+    print(f"Redo-views: {redo_views}")
+
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
     dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
 
     split_idx = dataset.get_idx_split()
 
-    train_loader = DataLoader(dataset[split_idx["train"]], batch_size=512, shuffle=True)
-    valid_loader = DataLoader(dataset[split_idx["valid"]], batch_size=512, shuffle=False)
-    test_loader = DataLoader(dataset[split_idx["test"]], batch_size=512, shuffle=False)
+    # train_loader = DataLoader(dataset[split_idx["train"]], batch_size=512, shuffle=True)
+    # valid_loader = DataLoader(dataset[split_idx["valid"]], batch_size=512, shuffle=False)
+    # test_loader = DataLoader(dataset[split_idx["test"]], batch_size=512, shuffle=False)
 
 
-    dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
+    # dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
     val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms)
+
+
+
+    model_dict = torch.load("outputs/Checkpoint-140.pt", map_location=torch.device('cpu'))
 
     model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                     proj_hidden_dim=args.emb_dim).to(device)
-    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
+
+    model.load_state_dict(model_dict['encoder_state_dict'])
+    # model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
 
     view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                                mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-    view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
+    view_learner.load_state_dict(model_dict['view_state_dict'])
+    # view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
+
+    # if redo_views:
+    #     for i, loader in enumerate(val_loaders):
+    #         vis_views(view_learner, loader, names[i], num=num)
 
     if 'classification' in dataset.task_type:
         ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
@@ -383,120 +388,119 @@ def run(args):
     else:
         raise NotImplementedError
 
-    evaluators = [ee] #[get_evaluators(dataset, evaluator) for dataset in val_loaders]
-
     general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
-    general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-    for ee in evaluators:
-        train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
-        logging.info(
-            "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
-                                                                                             test_score))
+    all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
+    # embedder = UMAP(n_components=2, n_jobs=4, verbose=1).fit(all_embeddings)
+    embedder = PCA(n_components=2).fit(all_embeddings)
 
-    model_losses = []
-    view_losses = []
-    view_regs = []
-    valid_curve = []
-    test_curve = []
-    train_curve = []
+    x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
 
-    best_val = 1.0e4
+    for i, emb in enumerate(separate_embeddings):
+        proj = embedder.transform(emb)
 
-    for epoch in tqdm(range(1, args.epochs + 1)):
+        proj_x, proj_y = proj[:num,0].tolist(), proj[:num,1].tolist()
+        x += proj_x
+        y += proj_y
+        plot_names += len(proj_x)*[names[i]]
 
-        fin_model_loss = 0.
-        fin_view_loss = 0.
-        fin_reg = 0.
+        img_root = os.getcwd() + '/original_datasets/' + names[i] + '/processed/*.png'
+        # print(img_root)
+        img_paths = glob.glob(img_root)
 
-        # for dataloader in dataloaders:
+        filenames = [int(filename.split('/')[-1][4:-4]) for filename in img_paths]
+        sort_inds = np.argsort(filenames).tolist()
+        # print(img_paths)
+        plot_paths += [img_paths[ind] for ind in sort_inds][:num]
 
-        model_loss_all = 0
-        view_loss_all = 0
-        reg_all = 0
+        img_root = os.getcwd() + '/original_datasets/' + names[i] + '/views/*.png'
+        # print(img_root)
+        img_paths = glob.glob(img_root)
 
-        model_loss_all, view_loss_all, reg_all = train_epoch(dataloader,
-                    model, model_optimizer,
-                    view_learner, view_optimizer,
-                    model_loss_all, view_loss_all, reg_all)
-
-        fin_model_loss += model_loss_all / len(dataloader)
-        fin_view_loss += view_loss_all / len(dataloader)
-        fin_reg += reg_all / len(dataloader)
+        filenames = [int(filename.split('/')[-1][5:-4]) for filename in img_paths]
+        sort_inds = np.argsort(filenames).tolist()
+        view_paths += [img_paths[ind] for ind in sort_inds]
 
 
 
-        # logging.info('Epoch {}, Model Loss {}, View Loss {}, Reg {}'.format(epoch, fin_model_loss, fin_view_loss, fin_reg))
-        model_losses.append(fin_model_loss)
-        view_losses.append(fin_view_loss)
-        view_regs.append(fin_reg)
+    # print(x,y,plot_names,plot_paths)
 
-        wandb.log({"Model Loss": fin_model_loss,
-                   "View Loss": fin_view_loss,
-                   "Reg Loss": fin_reg})
+    print(len(x), len(y), len(plot_names), len(plot_paths), len(view_paths))
+    output_file("toolbar.html")
 
-        if epoch % 10 == 0:
-            model.eval()
-            total_val = 0.
-            total_train = 0.
-            general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-            for ee in evaluators:
-                train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                             test_loader, vis=True)
-                total_val += val_score
-                total_train += train_score
+    source = ColumnDataSource(
+        data=dict(
+            x=x,
+            y=y,
+            desc=plot_names,
+            imgs=plot_paths,
+            views = view_paths
+        )
+    )
+
+    scatter_source = ColumnDataSource(
+        data=dict(
+            x=x,
+            y=y,
+            desc=plot_names
+        )
+    )
+
+    # <div>
+    #     <span style="font-size: 15px;">Location</span>
+    #     <span style="font-size: 10px; color: #696;">($x, $y)</span>
+    # </div>
+
+    hover = HoverTool(
+        tooltips="""
+            <div>
+                <div>
+                    <span style="font-size: 15px; font-weight: bold;">@desc</span>
+                    <span style="font-size: 10px;">Original and View</span>
+                </div>
+                <div>
+                    <img
+                        src="@imgs" height="128" alt="missing" width="128"
+                        style="float: left; margin: 0px 0px 0px 0px;"
+                        border="2"
+                    ></img>
+                    <img
+                        src="@views" height="128" alt="missing" width="128"
+                        style="float: left; margin: 0px 0px 0px 0px;"
+                        border="2"
+                    ></img>
+                </div>
+
+            </div>
+            """
+    )
+
+    p = figure(tools=[hover,BoxZoomTool(), ResetTool()],
+               title="Mouse over the dots", aspect_ratio = 16/9, lod_factor = 10)
+
+    palette = d3['Category10'][len(set(plot_names))]
+    color_map = bmo.CategoricalColorMapper(factors=tuple(set(plot_names)),
+                                           palette=palette)
+
+    p.scatter('x', 'y',  size=5, color={'field': 'desc', 'transform': color_map}, alpha=0.15, source=source)
+
+    p.sizing_mode = 'scale_width'
 
 
-            wandb.log({"Train Score": total_train,
-                       "Val Score": total_val})
+    x_array, y_array = np.array(sorted(x)), np.array(sorted(y))
+    n_points = x_array.shape[0]
+    outlier = [x_array[int(0.01*n_points)],x_array[int(0.99*n_points)], y_array[int(0.01*n_points)], y_array[int(0.99*n_points)]]
 
-        # logging.info(
-        #     "Metric: {} Train: {} Val: {} Test: {}".format(evaluator.eval_metric, train_score, val_score, test_score))
+    upper_lim, lower_lim = max(outlier), min(outlier)
 
-            train_curve.append(train_score)
-            valid_curve.append(val_score)
-            test_curve.append(test_score)
+    p.x_range = Range1d(lower_lim, upper_lim)
+    p.y_range = Range1d(lower_lim, upper_lim)
 
-            if total_val <= best_val:
-                best_val = val_score
-            torch.save({
-                'epoch': epoch,
-                'encoder_state_dict': model.state_dict(),
-                'encoder_optimizer_state_dict': model_optimizer.state_dict(),
-                'view_state_dict': view_learner.state_dict(),
-                'view_optimizer_state_dict': view_optimizer.state_dict(),
-                'loss': val_score,
-            }, f"{wandb.run.dir}/Checkpoint-{epoch}-{np.random.randint(0,10)}.pt")
+    show(p)
 
-    train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                 test_loader, vis = True)
 
-    general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-
-    if 'classification' in dataset.task_type:
-        best_val_epoch = np.argmax(np.array(valid_curve))
-        best_train = max(train_curve)
-    else:
-        best_val_epoch = np.argmin(np.array(valid_curve))
-        best_train = min(train_curve)
-
-    # plt.plot(valid_curve, label="validation")
-    # plt.plot(train_curve, label = "train")
-    # plt.plot(test_curve, label = "test")
-    #
-    # plt.legend(shadow=True)
-    #
-    # plt.show()
-
-    logging.info('FinishedTraining!')
-    logging.info('BestEpoch: {}'.format(best_val_epoch))
-    logging.info('BestTrainScore: {}'.format(best_train))
-    logging.info('BestValidationScore: {}'.format(valid_curve[best_val_epoch]))
-    logging.info('FinalTestScore: {}'.format(test_curve[best_val_epoch]))
-
-    return valid_curve[best_val_epoch], test_curve[best_val_epoch]
 
 
 def arg_parse():
@@ -523,6 +527,12 @@ def arg_parse():
     parser.add_argument('--epochs', type=int, default=5000,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
+
+    parser.add_argument('--num', type=int, default=5000,
+                        help='Number of points included in each dataset')
+
+    parser.add_argument('--redo_views', type=bool, default=False,
+                        help='Whether to re-vis views')
 
     parser.add_argument('--seed', type=int, default=0)
 

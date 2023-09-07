@@ -449,6 +449,7 @@ class GeneralEmbeddingEvaluation():
 					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
 					   label=f"{names[i]} - {proj.shape[0]} graphs")
 
+
 		ax2.legend(shadow=True)
 		ax2.set_title("PCA Projection")
 

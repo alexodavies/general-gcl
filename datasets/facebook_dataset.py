@@ -17,12 +17,19 @@ import numpy as np
 print(os.getcwd())
 # from utils import vis_from_pyg
 
+
 def vis_from_pyg(data, filename = None):
     edges = data.edge_index.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
 
     g = nx.Graph()
     g.add_edges_from(edges)
+
+    # dropped_nodes = np.ones(labels.shape[0]).astype(bool)
+    for ilabel in range(labels.shape[0]):
+        if ilabel not in np.unique(edges):
+            g.add_node(ilabel)
+    # labels = labels[dropped_nodes]
 
     fig, ax = plt.subplots(figsize = (6,6))
 
