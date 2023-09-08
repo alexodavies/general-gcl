@@ -7,6 +7,8 @@ from datetime import datetime
 from tqdm import tqdm
 import os
 
+import matplotlib as mpl
+
 import numpy as np
 import torch
 from ogb.graphproppred import Evaluator
@@ -22,7 +24,7 @@ from datasets.facebook_dataset import get_fb_dataset, FacebookDataset, vis_from_
 from datasets.ego_dataset import get_deezer, EgoDataset
 from datasets.community_dataset import get_community_dataset
 from datasets.cora_dataset import get_cora_dataset, CoraDataset
-from datasets.random_dataset import get_random_dataset
+from datasets.random_dataset import RandomDataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
@@ -32,11 +34,11 @@ from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 
 from umap import UMAP
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 import glob
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d
-from bokeh.palettes import d3
+from bokeh.palettes import d3, Spectral
 import bokeh.models as bmo
 
 
@@ -147,7 +149,8 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social))]
+                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social)),
+                       transforms(RandomDataset(os.getcwd()+'/original_datasets/'+'random', stage = "val", num=num_social))]
 
 
 
@@ -184,7 +187,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
     # # combined = transforms(combined)
     # print(combined)
 
-    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora"]
+    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random"]
 
     #
     # datasets = datasets + [get_fb_dataset(num = num_social),
@@ -261,6 +264,21 @@ def get_evaluators(dataset, evaluator):
 
 def vis_views(view_learner, loader, dataset_name, num = 10000):
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
+    skip_all = True
+    for i in range(num):
+        if f"view-{i}.png" in existing_files:
+            pass
+        else:
+            skip_all = False
+            break
+
+    if skip_all:
+        return
+
+
     view_data = []
 
     view_learner.eval()
@@ -282,21 +300,14 @@ def vis_views(view_learner, loader, dataset_name, num = 10000):
             kept = torch.bernoulli(batch_aug_edge_weight).to(torch.bool)
             print(f"Dropped {kept.shape[0] - torch.sum(kept)} edges out of {kept.shape[0]}")
 
-
             # Kept is a boolean array of whether an edge is kept after the view
-
             datalist = batch.to_data_list()
-            new_datalist = []
             edges_so_far = 0
             for idata, data in enumerate(datalist):
 
                 dropped_slice = kept[edges_so_far:edges_so_far + data.num_edges]
-                # print(data.edge_index)
                 new_edges = data.edge_index[:,dropped_slice]
-                # print(data.edge_index)
                 edges_so_far += data.num_edges
-
-
                 data.edge_index = new_edges
                 datalist[idata] = data
 
@@ -313,8 +324,8 @@ def vis_views(view_learner, loader, dataset_name, num = 10000):
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
     for i, data in enumerate(tqdm(view_data)):
         filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/views/view-{i}.png'
-        if f"view-{i}.png" in existing_files or i >= num:
-            print(f"{filename} already exists")
+        if i >= num or f"view-{i}.png" in existing_files:
+            # print(f"{filename} already exists")
             pass
         else:
             vis_from_pyg(data, filename=filename)
@@ -367,9 +378,9 @@ def run(args):
     view_learner.load_state_dict(model_dict['view_state_dict'])
     # view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
-    # if redo_views:
-    #     for i, loader in enumerate(val_loaders):
-    #         vis_views(view_learner, loader, names[i], num=num)
+    if redo_views:
+        for i, loader in enumerate(val_loaders):
+            vis_views(view_learner, loader, names[i], num=num)
 
     if 'classification' in dataset.task_type:
         ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
@@ -393,10 +404,13 @@ def run(args):
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    # embedder = UMAP(n_components=2, n_jobs=4, verbose=1).fit(all_embeddings)
-    embedder = PCA(n_components=2).fit(all_embeddings)
+    embedder = UMAP(n_components=2, n_neighbors=240, n_jobs=4, verbose=1).fit(all_embeddings)
+    # embedder = PCA(n_components=2).fit(all_embeddings)
+    # embedder = FastICA(n_components=2).fit(all_embeddings)
+    # embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
 
     x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
+    ind_x, ind_y, ind_plot_names, ind_plot_paths, ind_view_paths = [], [], [], [], []
 
     for i, emb in enumerate(separate_embeddings):
         proj = embedder.transform(emb)
@@ -404,7 +418,15 @@ def run(args):
         proj_x, proj_y = proj[:num,0].tolist(), proj[:num,1].tolist()
         x += proj_x
         y += proj_y
+
+        ind_x.append(proj_x)
+        ind_y.append(proj_y)
+
         plot_names += len(proj_x)*[names[i]]
+
+        # ind_plot_names.append(len(proj_x)*[names[i]])
+
+        ind_plot_names.append(names[i])
 
         img_root = os.getcwd() + '/original_datasets/' + names[i] + '/processed/*.png'
         # print(img_root)
@@ -415,6 +437,9 @@ def run(args):
         # print(img_paths)
         plot_paths += [img_paths[ind] for ind in sort_inds][:num]
 
+        ind_plot_paths.append([img_paths[ind] for ind in sort_inds][:num])
+
+
         img_root = os.getcwd() + '/original_datasets/' + names[i] + '/views/*.png'
         # print(img_root)
         img_paths = glob.glob(img_root)
@@ -423,6 +448,8 @@ def run(args):
         sort_inds = np.argsort(filenames).tolist()
         view_paths += [img_paths[ind] for ind in sort_inds]
 
+        ind_view_paths.append([img_paths[ind] for ind in sort_inds])
+
 
 
     # print(x,y,plot_names,plot_paths)
@@ -430,23 +457,15 @@ def run(args):
     print(len(x), len(y), len(plot_names), len(plot_paths), len(view_paths))
     output_file("toolbar.html")
 
-    source = ColumnDataSource(
-        data=dict(
-            x=x,
-            y=y,
-            desc=plot_names,
-            imgs=plot_paths,
-            views = view_paths
-        )
-    )
 
-    scatter_source = ColumnDataSource(
-        data=dict(
-            x=x,
-            y=y,
-            desc=plot_names
-        )
-    )
+
+    # scatter_source = ColumnDataSource(
+    #     data=dict(
+    #         x=x,
+    #         y=y,
+    #         desc=plot_names
+    #     )
+    # )
 
     # <div>
     #     <span style="font-size: 15px;">Location</span>
@@ -484,19 +503,52 @@ def run(args):
     color_map = bmo.CategoricalColorMapper(factors=tuple(set(plot_names)),
                                            palette=palette)
 
-    p.scatter('x', 'y',  size=5, color={'field': 'desc', 'transform': color_map}, alpha=0.15, source=source)
+    unique_names = np.arange(len(names))
 
+    colors = [
+        "#%02x%02x%02x" % (int(r), int(g), int(b)) for r, g, b, _ in 255 * mpl.cm.tab20(mpl.colors.Normalize()(unique_names))
+    ]
+
+    print(len(names), len(ind_x), len(ind_y), len(ind_plot_paths), len(ind_view_paths))
+    for i in range(len(names)):
+        name = names[i]
+    # for i, name in enumerate(names):
+        print(name,
+              len(ind_x[i]),
+                len(ind_y[i]),
+                # desc= ind_x[i].shape[0] * [name],
+                len(ind_plot_paths[i]),
+                len(ind_view_paths[i]))
+
+        source = ColumnDataSource(
+            data=dict(
+                x=ind_x[i],
+                y=ind_y[i],
+                desc= len(ind_x[i]) * [name],
+                imgs=ind_plot_paths[i],
+                views=ind_view_paths[i]
+            )
+        )
+
+        p.scatter("x", "y", color = colors[i], size=5, alpha=0.4, legend_label=name, source=source)
+    p.legend.click_policy = "hide"
+    p.legend.location = "top_left"
     p.sizing_mode = 'scale_width'
 
 
     x_array, y_array = np.array(sorted(x)), np.array(sorted(y))
     n_points = x_array.shape[0]
-    outlier = [x_array[int(0.01*n_points)],x_array[int(0.99*n_points)], y_array[int(0.01*n_points)], y_array[int(0.99*n_points)]]
+    outlier_x = [x_array[int(0.005*n_points)],x_array[int(0.995*n_points)]]
+    outlier_y = [y_array[int(0.005*n_points)], y_array[int(0.995*n_points)]]
 
-    upper_lim, lower_lim = max(outlier), min(outlier)
+    upper_lim_x, lower_lim_x = max(outlier_x), min(outlier_x)
+    upper_lim_y, lower_lim_y = max(outlier_y), min(outlier_y)
 
-    p.x_range = Range1d(lower_lim, upper_lim)
-    p.y_range = Range1d(lower_lim, upper_lim)
+    p.x_range = Range1d(lower_lim_x, upper_lim_x)
+    p.y_range = Range1d(lower_lim_y, upper_lim_y)
+
+    p.xaxis.axis_label = f"{embedder} 0"
+    p.yaxis.axis_label = f"{embedder} 1"
 
     show(p)
 
