@@ -67,7 +67,7 @@ def get_random_dataset(keep_target = False, num = 1000):
     datalist = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in tqdm(nx_graph_list)]
 
     if keep_target:
-        for idata, data in datalist:
+        for idata, data in enumerate(datalist):
             data.y = torch.Tensor([Ns[idata], rhos[idata]])
             datalist[idata] = data
 
@@ -104,7 +104,7 @@ class RandomDataset(InMemoryDataset):
             print("Facebook files exist")
             return
 
-        data_list = get_random_dataset()#get_fb_dataset(num=self.num)
+        data_list = get_random_dataset(num=self.num, keep_target=self.stage != "train")#get_fb_dataset(num=self.num)
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -112,9 +112,9 @@ class RandomDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
-        if self.stage != "train":
-            for i, data in enumerate(data_list):
-                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
+        # if self.stage != "train":
+        #     for i, data in enumerate(data_list):
+        #         vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])

@@ -240,9 +240,9 @@ class FacebookDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
-        if self.stage != "train":
-            for i, data in enumerate(data_list):
-                vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
+        # if self.stage != "train":
+        #     for i, data in enumerate(data_list):
+        #         vis_from_pyg(data, filename=self.root + f'/processed/{self.stage}-{i}.png')
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[self.stage_to_index[self.stage]])
