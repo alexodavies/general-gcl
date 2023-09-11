@@ -14,8 +14,6 @@ from umap import UMAP
 from torch_geometric.data import DataLoader
 import wandb
 
-from sklearn.linear_model import Ridge, LogisticRegression
-from sklearn.metrics import f1_score
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
@@ -397,94 +395,6 @@ class EmbeddingEvaluation():
 		return np.array(kf_train).mean(), np.array(kf_val).mean(), np.array(kf_test).mean()
 
 
-class TargetEvaluation():
-	def __init__(self):
-		self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-	def evaluate(self, embedding, loader, name):
-		targets = []
-		print(name)
-		for batch in loader:
-			# print(batch.y)
-			if batch.y is None or name == "ogbg-molpcba":
-				return 0.
-
-			else:
-				selected_y = batch.y
-				# print(selected_y)
-				if type(selected_y) is list:
-					selected_y = torch.Tensor(selected_y)
-
-				if selected_y.dim() > 1:
-					selected_y = [selected_y[i, :].cpu().numpy().tolist() for i in range(selected_y.shape[0])]
-				# else:
-				else:
-					selected_y = selected_y.cpu().numpy().tolist()
-				# print(selected_y)
-				# if len(selected_y)
-
-				targets += selected_y
-				# print(batch.y, name)
-		# targets = np.array(targets)
-		# print(targets[:10], type(targets[0]), len(targets), name)
-		targets = self.tidy_labels(targets).flatten()
-		if type(targets[0]) is int or type(targets[0]) is np.int64:
-			self.task = "classification"
-		else:
-			self.task = "regression"
-
-		self.setup_models()
-		# print(targets[:10], type(targets[0]), name)
-
-		self.model.fit(embedding, targets)
-		pred_target = self.model.predict(embedding)
-
-		if self.task == "classification":
-			score = 1 - f1_score(targets, pred_target)
-		else:
-			score = np.mean((targets - pred_target)**2)
-
-		return score
-
-	def setup_models(self):
-		if self.task == "classification":
-			self.model = LogisticRegression(dual=False, fit_intercept=True, max_iter=10000)
-		# ee = EmbeddingEvaluation(MLPClassifier(max_iter=2000),
-		#                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-		#                          param_search=True)
-		elif self.task == "regression":
-			self.model = Ridge(fit_intercept=True, copy_X=True, max_iter=10000)
-
-
-	def tidy_labels(self, labels):
-
-		if type(labels[0]) is not list:
-			if np.sum(labels) == np.sum(np.array(labels).astype(int)):
-				labels = np.array(labels).astype(int)
-			else:
-				labels = np.array(labels)
-			return labels
-
-		# Could be lists of floats
-		elif type(labels[0][0]) is float:
-			return np.array(labels)
-
-		# Possibility of one-hot labels
-		elif np.sum(labels[0][0]) == 1 and type(labels[0][0]) is int:
-
-			new_labels = []
-			for label in labels:
-				new_labels.append(np.argmax(label))
-
-			return np.array(new_labels)
-
-		else:
-			return np.array(labels)
-
-
-
-
-
 class GeneralEmbeddingEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -493,19 +403,6 @@ class GeneralEmbeddingEvaluation():
 		all_embeddings, separate_embeddings = self.get_embeddings(encoder, loaders)
 		self.centroid_similarities(separate_embeddings, names)
 		self.vis(all_embeddings, separate_embeddings, names)
-
-		total_score = 0.
-
-		for i_embedding, embedding in enumerate(separate_embeddings):
-			loader = loaders[i_embedding]
-			name = names[i_embedding]
-			evaluator = TargetEvaluation()
-			score = evaluator.evaluate(embedding, loader, name)
-
-			wandb.log({name: score})
-			total_score += score
-
-		wandb.log({"Total Val Score":total_score})
 
 	def get_embeddings(self, encoder, loaders):
 		encoder.eval()
@@ -558,7 +455,6 @@ class GeneralEmbeddingEvaluation():
 
 		plt.savefig("outputs/embedding.png")
 		wandb.log({"Embedding": wandb.Image("outputs/embedding.png")})
-		plt.close()
 
 	def centroid_similarities(self, embeddings, names):
 		embed_dim = embeddings[0].shape[1]

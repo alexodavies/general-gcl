@@ -83,16 +83,10 @@ class FromOGBDataset(InMemoryDataset):
             print("Found stage train, dropping targets")
             new_data_list = []
             for i, item in enumerate(data_list[:keep_n]):
-                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
 
-                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
-                            edge_index=item.edge_index,
-                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
-                            y = None)
-
-                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
-                #             edge_attr=item.edge_attr, y = None)
-                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}, edge attr {data.edge_attr.shape}")
+                data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                            edge_attr=item.edge_attr, y = None)
+                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}")
                 # print(data)
                 # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
                 new_data_list.append(data)
@@ -100,16 +94,9 @@ class FromOGBDataset(InMemoryDataset):
         else:
             new_data_list = []
             for i, item in enumerate(data_list[:keep_n]):
-                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
 
-
-                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
-                            edge_index=item.edge_index,
-                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
-                            y = item.y)
-
-                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
-                #             edge_attr=item.edge_attr, y = item.y)
+                data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                            edge_attr=item.edge_attr, y = item.y)
                 # print(f"Val x shape {data.x.shape}, edge index {data.edge_index.shape}")
                 # print(data)
                 # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')

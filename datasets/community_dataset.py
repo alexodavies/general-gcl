@@ -7,7 +7,7 @@ from tqdm import tqdm
 import os
 from torch_geometric.data import InMemoryDataset
 
-def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_intra = 0.5, P_inter=0.05 + 0.1*np.random.random()):
+def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_intra = 0.5, P_inter=0.2*np.random.random()):
 
     sizes = (np.array(proportions) * size).astype(int).tolist()#
 
@@ -22,7 +22,7 @@ def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_int
         g = nx.Graph()
 
         for i in range(counter, counter + size):
-            g.add_node(i, attrs= torch.Tensor([1]))#means[i_size]  )#np.random.randn(2) + means[i_size])
+            g.add_node(i, attrs= means[i_size]  )#np.random.randn(2) + means[i_size])
 
         counter += size
         subgraphs.append(g)
@@ -31,7 +31,7 @@ def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_int
         for n1 in g.nodes():
             for n2 in g.nodes():
                 if np.random.random() <= P_intra:
-                    g.add_edge(n1, n2, attr=torch.Tensor([1]))
+                    g.add_edge(n1, n2, attr=torch.Tensor([1, 0, 0]))
 
     node_identifiers = [list(g.nodes()) for g in subgraphs]
 
@@ -47,7 +47,7 @@ def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_int
                 for n1 in ids_1:
                     for n2 in ids_2:
                         if np.random.random() <= P_inter:
-                            G.add_edge(n1, n2, attr=torch.Tensor([1]))
+                            G.add_edge(n1, n2, attr=torch.Tensor([0, 1, 0]))
 
     return G, P_inter
 
@@ -59,7 +59,7 @@ def get_community_graph(size = 48, proportions = [0.25, 0.25, 0.25, 0.25], P_int
 #     return loader
 
 def get_community_dataset(keep_target = False, num = 1000):
-    nx_graph_list_rhos = [get_community_graph(P_inter=0.05 + 0.05*np.random.random()) for _ in tqdm(range(num), leave=False)]
+    nx_graph_list_rhos = [get_community_graph() for _ in tqdm(range(num), leave=False)]
     nx_graph_list = [item[0] for item in nx_graph_list_rhos]
     rhos= [item[1] for item in nx_graph_list_rhos]
     # Ns = [graph.order() for graph in nx_graph_list]
