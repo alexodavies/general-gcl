@@ -144,7 +144,7 @@ def download_facebook(visualise = False):
     graph = nx.Graph()
     label_specific = labels["page_type"]
     for col in labels["id"]:
-        graph.add_node(int(col), attrs = conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
+        graph.add_node(int(col), attrs = torch.Tensor([1]))#conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
     # print(edgelist)
     sources = edgelist["id_1"].to_numpy().astype("int")
     targets = edgelist["id_2"].to_numpy().astype("int")
@@ -154,7 +154,7 @@ def download_facebook(visualise = False):
 
 
     for i in range(sources.shape[0]):
-        graph.add_edge(sources[i], targets[i], attr = torch.Tensor([1, 0, 0]))
+        graph.add_edge(sources[i], targets[i], attr = torch.Tensor([1]))
 
     for node in list(graph.nodes(data=True)):
         data = node[1]
