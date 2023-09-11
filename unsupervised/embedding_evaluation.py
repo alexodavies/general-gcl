@@ -405,28 +405,20 @@ class TargetEvaluation():
 		targets = []
 		print(name)
 		for batch in loader:
-			# print(batch.y)
 			if batch.y is None or name == "ogbg-molpcba":
 				return 0.
 
 			else:
 				selected_y = batch.y
-				# print(selected_y)
 				if type(selected_y) is list:
 					selected_y = torch.Tensor(selected_y)
 
 				if selected_y.dim() > 1:
 					selected_y = [selected_y[i, :].cpu().numpy().tolist() for i in range(selected_y.shape[0])]
-				# else:
 				else:
 					selected_y = selected_y.cpu().numpy().tolist()
-				# print(selected_y)
-				# if len(selected_y)
 
 				targets += selected_y
-				# print(batch.y, name)
-		# targets = np.array(targets)
-		# print(targets[:10], type(targets[0]), len(targets), name)
 		targets = self.tidy_labels(targets).flatten()
 		if type(targets[0]) is int or type(targets[0]) is np.int64:
 			self.task = "classification"
@@ -434,7 +426,6 @@ class TargetEvaluation():
 			self.task = "regression"
 
 		self.setup_models()
-		# print(targets[:10], type(targets[0]), name)
 
 		self.model.fit(embedding, targets)
 		pred_target = self.model.predict(embedding)
@@ -449,9 +440,6 @@ class TargetEvaluation():
 	def setup_models(self):
 		if self.task == "classification":
 			self.model = LogisticRegression(dual=False, fit_intercept=True, max_iter=10000)
-		# ee = EmbeddingEvaluation(MLPClassifier(max_iter=2000),
-		#                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-		#                          param_search=True)
 		elif self.task == "regression":
 			self.model = Ridge(fit_intercept=True, copy_X=True, max_iter=10000)
 
@@ -551,6 +539,11 @@ class GeneralEmbeddingEvaluation():
 			ax2.scatter(proj[:, 0], proj[:, 1],
 					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
 					   label=f"{names[i]} - {proj.shape[0]} graphs")
+
+
+		# mean_x, dev_x = np.mean(proj[:, 0]), np.std(proj[:, 0])
+		# mean_y, dev_y = np.mean(proj[:, 1]), np.std(proj[:, 1])
+
 
 
 		ax2.legend(shadow=True)

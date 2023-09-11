@@ -9,8 +9,8 @@ import os
 
 import matplotlib as mpl
 
-from sklearnex import patch_sklearn
-patch_sklearn()
+# from sklearnex import patch_sklearn
+# patch_sklearn()
 
 import numpy as np
 import torch
@@ -501,7 +501,7 @@ def run(args):
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    embedder = UMAP(n_components=2, n_neighbors=200, n_jobs=4, verbose=1).fit(all_embeddings)
+    embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=4, verbose=1).fit(all_embeddings)
     # embedder = PCA(n_components=2).fit(all_embeddings)
     # embedder = FastICA(n_components=2).fit(all_embeddings)
     # embedder = TruncatedSVD(n_components=2).fit(all_embeddings)

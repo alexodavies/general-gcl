@@ -113,32 +113,10 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
 
     return DataLoader(combined, batch_size=batch_size, shuffle=True), "Dummy"
 
-    #
-    # datasets = datasets + [get_fb_dataset(num = num_social),
-    #                   get_deezer(num=2 * num_social),
-    #                   get_cora_dataset(batch_size, num=num_social)]#,
-    #                   # get_community_dataset(batch_size, num = num_social),
-    #                   # get_random_dataset(batch_size, num = num_social)
-    #                   # ]
 
-    # large_dataset =
-
-    # return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-    #        names +  ["Molesol (target)", "Facebook", "Egos", "Cora"]#, "Communities", "Random"]
-
-    # out = torch.utils.data.ConcatDataset([datasets])
-    #
-    # return out
-
-def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
+def get_val_loaders(dataset, batch_size, transforms, num_social = 10000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
 
-
-    # datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
-
-    # split_idx = [data.get_idx_split() for data in datasets]
-
-    # datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
@@ -147,8 +125,6 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
                        transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social)),
                        transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num_social)),
                        transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "val", num=num_social))]
-
-
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
     split_idx = [data.get_idx_split() for data in datasets]
@@ -165,42 +141,13 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
 
     datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
 
-
-    # combined = dataset
-
-    # for data in datasets:
-    #     combined += data
-
-
-
     all_datasets = datasets + social_datasets
 
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-    # print(datasets)
-    # for data in social_datasets:
-    #     combined += data
-    #
-    # # combined = transforms(combined)
-    # print(combined)
 
-    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora", "Random", "Community"]
 
-    #
-    # datasets = datasets + [get_fb_dataset(num = num_social),
-    #                   get_deezer(num=2 * num_social),
-    #                   get_cora_dataset(batch_size, num=num_social)]#,
-    #                   # get_community_dataset(batch_size, num = num_social),
-    #                   # get_random_dataset(batch_size, num = num_social)
-    #                   # ]
+    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora", "Random", "Community", "Road", "Neurons"]
 
-    # large_dataset =
-
-    # return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-    #        names +  ["Molesol (target)", "Facebook", "Egos", "Cora"]#, "Communities", "Random"]
-
-    # out = torch.utils.data.ConcatDataset([datasets])
-    #
-    # return out
 
 def get_evaluators(dataset, evaluator):
 

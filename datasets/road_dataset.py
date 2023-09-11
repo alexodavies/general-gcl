@@ -61,12 +61,6 @@ def download_roads(visualise = False):
     # print(os.getcwd(), os.listdir())
     os.chdir("original_datasets")
 
-    if "road-graph.npz" in os.listdir():
-        with open("road-graph.npz", "rb") as f:
-            graph = pickle.load(f)
-        os.chdir('../')
-        return graph
-    # print(os.getcwd())
 
     if "roads" not in os.listdir():
         print("Downloading roads graph")
@@ -84,6 +78,15 @@ def download_roads(visualise = False):
         os.remove("roadNet-PA.txt.gz")
     else:
         os.chdir("roads")
+
+        if "road-graph.npz" in os.listdir():
+            with open("road-graph.npz", "rb") as f:
+                graph = pickle.load(f)
+            os.chdir('../')
+            return graph
+    # print(os.getcwd())
+
+
     # os.chdir("facebook_large")
 
     edgelist = pd.read_csv("roadNet-PA.txt", delimiter = "\t", header=3)
@@ -93,23 +96,33 @@ def download_roads(visualise = False):
     # for col in labels["id"]:
     #     graph.add_node(int(col), attrs = torch.Tensor([1]))#conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
     # print(edgelist)
+    print("Collecting edgelist")
     sources = edgelist["# FromNodeId"].to_numpy().astype("int")
     targets = edgelist["ToNodeId"].to_numpy().astype("int")
     #
     # for i in range(sources):
     #     source =
+    print("Edges to tuples")
+    edges_to_add = [(sources[i], targets[i]) for i in tqdm(range(sources.shape[0]))]
+    # attr_to_add = [torch.Tensor([1]) for i in tqdm(range(sources.shape[0]))]
 
+    print("Adding edges")
+    graph.add_edges_from(edges_to_add)
 
-    for i in range(sources.shape[0]):
-        graph.add_edge(sources[i], targets[i], attr = torch.Tensor([1]))
+    del edges_to_add
 
-    for node in graph.nodes():
-        graph.nodes[node]["attr"] = torch.Tensor([1])
+    # attr_to_add = [torch.Tensor([1]) for i in range(sources.shape[0])]
 
-    for node in list(graph.nodes(data=True)):
-        data = node[1]
-        if len(data) == 0:
-            graph.remove_node(node[0])
+    # for i in range(sources.shape[0]):
+    #     graph.add_edge(sources[i], targets[i], attr = torch.Tensor([1]))
+    print("Adding dummy attrs to nodes")
+    # for node in graph.nodes():
+    #     graph.nodes[node]["attr"] = torch.Tensor([1])
+
+    # for node in list(graph.nodes(data=True)):
+    #     data = node[1]
+    #     if len(data) == 0:
+    #         graph.remove_node(node[0])
 
     graph = nx.convert_node_labels_to_integers(graph)
     print(f"Facebook {graph}")
@@ -120,13 +133,39 @@ def download_roads(visualise = False):
     graph = nx.convert_node_labels_to_integers(graph)
     graph.remove_edges_from(nx.selfloop_edges(graph))
 
-    with open("reddit-graph.npz", "wb") as f:
+    with open("road_graph.npz", "wb") as f:
         pickle.dump(graph, f)
 
     os.chdir(start_dir)
     # print(graph)
     # quit()
     return graph
+
+
+def individual_sample(graph):
+    sampler = DiffusionSampler(number_of_nodes=np.random.randint(12, 48))
+    return nx.convert_node_labels_to_integers(sampler.sample(graph))
+
+def add_attrs_to_graph(g):
+    # for node in graph.nodes():
+    #     graph.nodes[node]["attr"] = torch.Tensor([1])
+    # print({n:torch.Tensor([1]).to(torch.int) for n in list(g.nodes())})
+    # print({e:torch.Tensor([1]).to(torch.int) for e in list(g.edges())})
+    # nx.set_node_attributes(g, {n:torch.Tensor([1]).to(torch.int) for n in list(g.nodes())})
+    # nx.set_edge_attributes(g, {e:torch.Tensor([1]).to(torch.int) for e in list(g.edges())})
+
+    # for node in g.nodes():
+    #     g.nodes[node]["attr"] = torch.Tensor([1])
+    #
+    # for edge in g.edges():
+    #     g.edges[node]["attr"] = torch.Tensor([1])
+    dummy_label = []
+    nx.set_edge_attributes(g, dummy_label, "attrs")
+    nx.set_node_attributes(g, dummy_label, "attrs")
+
+    dummy_label.append(torch.Tensor([1]))
+
+    return g
 
 def ESWR(graph, n_graphs, size):
 
@@ -135,6 +174,13 @@ def ESWR(graph, n_graphs, size):
     # possible_samplers = [item[1] for item in possible_samplers]
     # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
 
+    # graphs = []
+
+    # prev = datetime.now()
+    # if is_parallel:
+    #     with concurrent.futures.ThreadPoolExecutor() as executor:
+    #         for n_coms in executor.map(community_worker, graph_ref_list):
+    #             sample_ref.append(n_coms)
 
     print(f"Sampling {n_graphs} graphs from {graph}")
     # graphs = []
@@ -144,7 +190,11 @@ def ESWR(graph, n_graphs, size):
     #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
     sampler = DiffusionSampler(number_of_nodes=np.random.randint(12, 48))
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
-    print(graphs[0])
+    graphs = [add_attrs_to_graph(g) for g in graphs]
+    print(graphs[0], graphs[0].nodes(data=True), graphs[0].edges(data=True))
+
+
+
     return graphs
 
 def get_road_dataset(num = 2000):
@@ -161,8 +211,13 @@ def get_road_dataset(num = 2000):
 
 
 
+
+
     for i, data in enumerate(data_objects):
         data.y = None # torch.Tensor([[0,0]])
+        # data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
+        # data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
+        # data_objects[i] = data
 
     return data_objects# loader
 
