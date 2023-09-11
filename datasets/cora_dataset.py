@@ -64,14 +64,14 @@ def download_cora(visualise = False):
 
     for node in list(G.nodes()):
         # class_tensor = base_tensor.clone()
-        class_tensor = torch.Tensor([node_classes[node]])#node_classes[node]
+        class_tensor = torch.Tensor([1])#node_classes[node]])#node_classes[node]
 
         # print(class_tensor, node_classes[node])
 
         G.nodes[node]["attrs"] = class_tensor
 
     for edge in list(G.edges()):
-        G.edges[edge]["attrs"] = torch.Tensor([1,0,0])
+        G.edges[edge]["attrs"] = torch.Tensor([1])
 
     CGs = [G.subgraph(c) for c in nx.connected_components(G)]
     CGs = sorted(CGs, key=lambda x: x.number_of_nodes(), reverse=True)

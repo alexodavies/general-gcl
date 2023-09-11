@@ -46,13 +46,13 @@ def get_random_graph(size = 48):
 
     G = nx.Graph()
     for i in range(np.random.randint(low = 12, high=size)):
-        G.add_node(i, attr = torch.Tensor([np.random.randint(1,9)]))
+        G.add_node(i, attr = torch.Tensor([1]))
 
 
     for n1 in G.nodes():
         for n2 in G.nodes():
             if np.random.random() <= rho:
-                G.add_edge(n1, n2, attr=torch.Tensor([1, 0, 0]))
+                G.add_edge(n1, n2, attr=torch.Tensor([1]))
 
 
     return G, rho
@@ -68,7 +68,7 @@ def get_random_dataset(keep_target = False, num = 1000):
 
     if keep_target:
         for idata, data in enumerate(datalist):
-            data.y = torch.Tensor([Ns[idata], rhos[idata]])
+            data.y = torch.Tensor([rhos[idata]])
             datalist[idata] = data
 
     return datalist

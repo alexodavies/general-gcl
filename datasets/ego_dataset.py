@@ -81,7 +81,7 @@ def get_deezer(num = 49152, include_targets = False):
             g.add_node(node, attr = torch.Tensor([1])) #, 0, 0, 0, 0, 0, 0, 0, 0]))
 
         for edge in edges:
-            g.add_edge(edge[0], edge[1], attr=torch.Tensor([1, 0, 0]))
+            g.add_edge(edge[0], edge[1], attr=torch.Tensor([1]))
         graphs.append(g)
 
     # loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in graphs],

@@ -20,9 +20,11 @@ import matplotlib.pyplot as plt
 
 from datasets.facebook_dataset import get_fb_dataset, FacebookDataset
 from datasets.ego_dataset import get_deezer, EgoDataset
-from datasets.community_dataset import get_community_dataset
+from datasets.community_dataset import get_community_dataset, CommunityDataset
 from datasets.cora_dataset import get_cora_dataset, CoraDataset
-from datasets.random_dataset import get_random_dataset
+from datasets.random_dataset import get_random_dataset, RandomDataset
+from datasets.neural_dataset import NeuralDataset
+from datasets.road_dataset import RoadDataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
@@ -98,7 +100,9 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social, stage="train")),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', num=num_social))]
+                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', num=num_social)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="train", num=num_social)),
+                       transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "train", num=num_social))]
 
     for data in social_datasets:
         combined += data
@@ -138,7 +142,11 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social))]
+                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social)),
+                       transforms(RandomDataset(os.getcwd()+'/original_datasets/'+'random', stage = "val", num=num_social)),
+                       transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num_social)),
+                       transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "val", num=num_social))]
 
 
 
@@ -175,7 +183,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
     # # combined = transforms(combined)
     # print(combined)
 
-    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora"]
+    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora", "Random", "Community"]
 
     #
     # datasets = datasets + [get_fb_dataset(num = num_social),
@@ -395,6 +403,8 @@ def run(args):
             "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
                                                                                              test_score))
 
+    # quit()
+
 
     model_losses = []
     view_losses = []
@@ -437,7 +447,7 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             model.eval()
             total_val = 0.
             total_train = 0.
@@ -525,6 +535,8 @@ def arg_parse():
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
 
     parser.add_argument('--seed', type=int, default=0)
+
+
 
     return parser.parse_args()
 

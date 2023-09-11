@@ -29,6 +29,8 @@ from datasets.ego_dataset import get_deezer, EgoDataset
 from datasets.community_dataset import get_community_dataset, CommunityDataset
 from datasets.cora_dataset import get_cora_dataset, CoraDataset
 from datasets.random_dataset import RandomDataset
+from datasets.neural_dataset import NeuralDataset
+from datasets.road_dataset import RoadDataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
@@ -41,7 +43,7 @@ from umap import UMAP
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 import glob
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
-from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d
+from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool
 from bokeh.palettes import d3, Spectral
 import bokeh.models as bmo
 
@@ -85,6 +87,7 @@ def vis_from_pyg(data, filename = None):
     edges = data.edge_index.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
 
+
     g = nx.Graph()
     g.add_edges_from(edges)
 
@@ -99,8 +102,9 @@ def vis_from_pyg(data, filename = None):
     pos = nx.kamada_kawai_layout(g)
 
     nx.draw_networkx_edges(g, pos = pos, ax = ax)
-    nx.draw_networkx_nodes(g, pos = pos, node_color=labels, cmap="tab20",
-                           vmin = 0, vmax = 20, ax = ax)
+    if np.unique(labels).shape[0] != 1:
+        nx.draw_networkx_nodes(g, pos=pos, node_color=labels, cmap="tab20",
+                               vmin=0, vmax=20, ax=ax)
 
     ax.axis('off')
 
@@ -110,6 +114,8 @@ def vis_from_pyg(data, filename = None):
     else:
         plt.savefig(filename)
         plt.close()
+
+    plt.close()
 
 def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
     names = ["ogbg-molclintox"]
@@ -162,7 +168,7 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
     #
     # return out
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
+def get_val_loaders(dataset, batch_size, transforms, num_social = 2500):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
 
 
@@ -176,7 +182,9 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
                        transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social)),
                        transforms(RandomDataset(os.getcwd()+'/original_datasets/'+'random', stage = "val", num=num_social)),
-                       transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social))]
+                       transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num_social)),
+                       transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "val", num=num_social))]
 
 
 
@@ -213,7 +221,7 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 15000):
     # # combined = transforms(combined)
     # print(combined)
 
-    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community"]
+    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community", "roads", "fruit_fly"]
 
     #
     # datasets = datasets + [get_fb_dataset(num = num_social),
@@ -328,7 +336,7 @@ def vis_vals(loader, dataset_name, num = 10000):
         # x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
 
 
-def vis_views(view_learner, loader, dataset_name, num = 10000):
+def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = False):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -394,9 +402,14 @@ def vis_views(view_learner, loader, dataset_name, num = 10000):
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
     for i, data in enumerate(tqdm(view_data)):
         filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/views/view-{i}.png'
+
+
+
         if i >= num or f"view-{i}.png" in existing_files:
             # print(f"{filename} already exists")
             pass
+        elif force_redo and i <= num:
+            vis_from_pyg(data, filename=filename)
         else:
             vis_from_pyg(data, filename=filename)
 
@@ -415,6 +428,19 @@ def run(args):
 
     num = args.num
     redo_views = args.redo_views
+    checkpoint = args.checkpoint
+
+    if checkpoint == "latest":
+        checkpoint_root = "wandb/latest-run/files"
+        checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+        print(checkpoints)
+        epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+        checkpoint_ind = np.argsort(epochs[::-1])[0]
+
+        checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    else:
+        checkpoint_path = f"outputs/{checkpoint}"
+
 
     print(f"Redo-views: {redo_views}")
 
@@ -434,7 +460,7 @@ def run(args):
 
 
 
-    model_dict = torch.load("outputs/Checkpoint-210-5.pt", map_location=torch.device('cpu'))
+    model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
 
     model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                     proj_hidden_dim=args.emb_dim).to(device)
@@ -475,8 +501,8 @@ def run(args):
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    # embedder = UMAP(n_components=2, n_neighbors=240, n_jobs=4, verbose=1).fit(all_embeddings)
-    embedder = PCA(n_components=2).fit(all_embeddings)
+    embedder = UMAP(n_components=2, n_neighbors=200, n_jobs=4, verbose=1).fit(all_embeddings)
+    # embedder = PCA(n_components=2).fit(all_embeddings)
     # embedder = FastICA(n_components=2).fit(all_embeddings)
     # embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
 
@@ -567,7 +593,7 @@ def run(args):
             """
     )
 
-    p = figure(tools=[hover,BoxZoomTool(), ResetTool()],
+    p = figure(tools=[hover, BoxZoomTool(), WheelZoomTool(), UndoTool(), ResetTool()],
                title="Mouse over the dots", aspect_ratio = 16/9, lod_factor = 10)
 
     palette = d3['Category10'][len(set(plot_names))]
@@ -601,7 +627,7 @@ def run(args):
             )
         )
 
-        p.scatter("x", "y", color = colors[i], size=5, alpha=0.4, legend_label=name, source=source)
+        p.scatter("x", "y", color = colors[i], size=5, alpha=1, legend_label=name, source=source)
     p.legend.click_policy = "hide"
     p.legend.location = "top_left"
     p.sizing_mode = 'scale_width'
@@ -609,8 +635,8 @@ def run(args):
 
     x_array, y_array = np.array(sorted(x)), np.array(sorted(y))
     n_points = x_array.shape[0]
-    outlier_x = [x_array[int(0.005*n_points)],x_array[int(0.995*n_points)]]
-    outlier_y = [y_array[int(0.005*n_points)], y_array[int(0.995*n_points)]]
+    outlier_x = [x_array[int(0.01*n_points)],x_array[int(0.99*n_points)]]
+    outlier_y = [y_array[int(0.01*n_points)], y_array[int(0.99*n_points)]]
 
     upper_lim_x, lower_lim_x = max(outlier_x), min(outlier_x)
     upper_lim_y, lower_lim_y = max(outlier_y), min(outlier_y)
@@ -659,6 +685,8 @@ def arg_parse():
     parser.add_argument('--redo_views', type=bool, default=False,
                         help='Whether to re-vis views')
 
+    parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
+
     # parser.add_argument('--seed', type=int, default=0)
 
     return parser.parse_args()
@@ -667,7 +695,7 @@ def arg_parse():
 if __name__ == '__main__':
 
     args = arg_parse()
-    args = setup_wandb(args)
+    # args = setup_wandb(args)
     # print(args.dataset, repr(args))
     # quit()
     run(args)
