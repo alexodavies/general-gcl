@@ -90,6 +90,7 @@ def ESWR(graph, n_graphs, size):
     possible_samplers = inspect.getmembers(samplers, inspect.isclass)
 
     possible_samplers = [item[1] for item in possible_samplers]
+    possible_samplers = [MetropolisHastingsRandomWalkSampler, DiffusionSampler, DepthFirstSearchSampler]
     # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
 
 

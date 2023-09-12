@@ -172,6 +172,7 @@ def ESWR(graph, n_graphs, size):
     possible_samplers = inspect.getmembers(samplers, inspect.isclass)
 
     possible_samplers = [item[1] for item in possible_samplers]
+    possible_samplers = [MetropolisHastingsRandomWalkSampler, DiffusionSampler, DepthFirstSearchSampler]
     # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
 
 
@@ -184,7 +185,6 @@ def ESWR(graph, n_graphs, size):
     # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
     # sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
     graphs = [nx.convert_node_labels_to_integers(graph) for i in tqdm(range(n_graphs))]
-    graphs = [add_attrs_to_graph(g) for g in graphs]
 
     return graphs
 
