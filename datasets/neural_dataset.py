@@ -125,6 +125,7 @@ def get_fly_dataset(num = 2000):
     fb_graph = load_fly()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
+    nx_graph_list = [add_attrs_to_graph(g) for g in nx_graph_list]
 
 
     # loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],

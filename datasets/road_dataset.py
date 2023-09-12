@@ -183,7 +183,7 @@ def ESWR(graph, n_graphs, size):
     #     sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
     #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
     # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
-    sampler = DiffusionSampler(48)
+    sampler = MetropolisHastingsRandomWalkSampler(96)
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
 
     return graphs
@@ -192,6 +192,7 @@ def get_road_dataset(num = 2000):
     fb_graph = download_roads()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
+    nx_graph_list = [add_attrs_to_graph(g) for g in nx_graph_list]
 
 
     # loader = pyg.loader.DataLoader([pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list],

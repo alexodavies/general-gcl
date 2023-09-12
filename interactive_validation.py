@@ -501,8 +501,8 @@ def run(args):
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=4, verbose=1).fit(all_embeddings)
-    # embedder = PCA(n_components=2).fit(all_embeddings)
+    # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=4, verbose=1).fit(all_embeddings)
+    embedder = PCA(n_components=2).fit(all_embeddings)
     # embedder = FastICA(n_components=2).fit(all_embeddings)
     # embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
 
@@ -594,7 +594,7 @@ def run(args):
     )
 
     p = figure(tools=[hover, BoxZoomTool(), WheelZoomTool(), UndoTool(), ResetTool()],
-               title="Mouse over the dots", aspect_ratio = 16/9, lod_factor = 10)
+               title="Mouse over the dots", aspect_ratio = 16/8, lod_factor = 10)
 
     palette = d3['Category10'][len(set(plot_names))]
     color_map = bmo.CategoricalColorMapper(factors=tuple(set(plot_names)),
