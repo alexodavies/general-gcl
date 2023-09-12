@@ -512,6 +512,7 @@ class GeneralEmbeddingEvaluation():
 			# colours += [i for n in range(train_emb.shape[0])]
 
 		return all_embeddings, separate_embeddings
+
 	def vis(self, all_embeddings, separate_embeddings, names):
 		# embedder = PCA(n_components=2).fit(embeddings)
 

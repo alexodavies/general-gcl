@@ -77,7 +77,7 @@ def from_ogb_dataset(dataset, target_y = torch.Tensor([[0,0]])):
 
     return
 
-def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
+def get_big_dataset(dataset, batch_size, transforms, num_social = 25000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
@@ -85,9 +85,9 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
 
     datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
 
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data) for i, data in enumerate(datasets)]
+    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num_social) for i, data in enumerate(datasets)]
 
-    combined = FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset)
+    combined = FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, num=num_social)
 
     for data in datasets:
         combined += data
@@ -114,7 +114,7 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
     return DataLoader(combined, batch_size=batch_size, shuffle=True), "Dummy"
 
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 10000):
+def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
 
 
@@ -394,7 +394,7 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
-        if epoch % 1 == 0:
+        if epoch % 2 == 0:
             model.eval()
             total_val = 0.
             total_train = 0.
@@ -477,7 +477,7 @@ def arg_parse():
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=5000,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
 
