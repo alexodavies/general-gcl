@@ -117,7 +117,7 @@ def vis_from_pyg(data, filename = None):
 
     plt.close()
 
-def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
+def get_big_dataset(dataset, batch_size, transforms, num_social = 20000):
     names = ["ogbg-molclintox"]
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
@@ -168,7 +168,7 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 100000):
     #
     # return out
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 2500):
+def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
 
 

@@ -14,6 +14,10 @@ import wget
 import matplotlib.pyplot as plt
 import numpy as np
 
+import inspect
+from littleballoffur.exploration_sampling import *
+import littleballoffur.exploration_sampling as samplers
+
 def vis_from_pyg(data, filename = None):
     edges = data.edge_index.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
@@ -82,9 +86,22 @@ def download_cora(visualise = False):
     return graph
 
 def ESWR(graph, n_graphs, size):
-    # print(f"Sampling {n_graphs} of size {size} from a {graph}")
-    sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
-    graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for _ in tqdm(range(n_graphs))]
+
+    possible_samplers = inspect.getmembers(samplers, inspect.isclass)
+
+    possible_samplers = [item[1] for item in possible_samplers]
+    # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+
+
+    print(f"Sampling {n_graphs} graphs from {graph}")
+    graphs = []
+    for i in tqdm(range(n_graphs), leave = False):
+        selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+        sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
+        graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+    # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
+    # sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
+    graphs = [nx.convert_node_labels_to_integers(graph) for i in tqdm(range(n_graphs))]
 
     return graphs
 

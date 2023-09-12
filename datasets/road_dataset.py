@@ -169,31 +169,22 @@ def add_attrs_to_graph(g):
 
 def ESWR(graph, n_graphs, size):
 
-    # possible_samplers = inspect.getmembers(samplers, inspect.isclass)
+    possible_samplers = inspect.getmembers(samplers, inspect.isclass)
 
-    # possible_samplers = [item[1] for item in possible_samplers]
+    possible_samplers = [item[1] for item in possible_samplers]
     # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
 
-    # graphs = []
-
-    # prev = datetime.now()
-    # if is_parallel:
-    #     with concurrent.futures.ThreadPoolExecutor() as executor:
-    #         for n_coms in executor.map(community_worker, graph_ref_list):
-    #             sample_ref.append(n_coms)
 
     print(f"Sampling {n_graphs} graphs from {graph}")
-    # graphs = []
-    # for i in tqdm(range(n_graphs), leave = False):
-    #     selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
-    #     sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
-    #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
-    sampler = DiffusionSampler(number_of_nodes=np.random.randint(12, 48))
-    graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
+    graphs = []
+    for i in tqdm(range(n_graphs), leave = False):
+        selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+        sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
+        graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+    # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
+    # sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
+    graphs = [nx.convert_node_labels_to_integers(graph) for i in tqdm(range(n_graphs))]
     graphs = [add_attrs_to_graph(g) for g in graphs]
-    print(graphs[0], graphs[0].nodes(data=True), graphs[0].edges(data=True))
-
-
 
     return graphs
 
