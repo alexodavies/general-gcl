@@ -159,11 +159,11 @@ def add_attrs_to_graph(g):
     #
     # for edge in g.edges():
     #     g.edges[node]["attr"] = torch.Tensor([1])
-    dummy_label = []
+    dummy_label = torch.Tensor([1])
     nx.set_edge_attributes(g, dummy_label, "attrs")
     nx.set_node_attributes(g, dummy_label, "attrs")
 
-    dummy_label.append(torch.Tensor([1]))
+    # dummy_label.append(torch.Tensor([1]))
 
     return g
 
@@ -215,9 +215,16 @@ def get_road_dataset(num = 2000):
 
     for i, data in enumerate(data_objects):
         data.y = None # torch.Tensor([[0,0]])
+        # print(data.edge_index, data.x, data.edge_attr)
         # data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
         # data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
         # data_objects[i] = data
+
+        data.edge_attr = data.edge_attr[:,0].reshape(-1,1)
+
+        # data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
+        # data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
+        nx_graph_list[i] = data
 
     return data_objects# loader
 

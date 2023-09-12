@@ -78,6 +78,27 @@ def load_fly(return_tensor = False):
 
     return nx_graph
 
+def add_attrs_to_graph(g):
+    # for node in graph.nodes():
+    #     graph.nodes[node]["attr"] = torch.Tensor([1])
+    # print({n:torch.Tensor([1]).to(torch.int) for n in list(g.nodes())})
+    # print({e:torch.Tensor([1]).to(torch.int) for e in list(g.edges())})
+    # nx.set_node_attributes(g, {n:torch.Tensor([1]).to(torch.int) for n in list(g.nodes())})
+    # nx.set_edge_attributes(g, {e:torch.Tensor([1]).to(torch.int) for e in list(g.edges())})
+
+    # for node in g.nodes():
+    #     g.nodes[node]["attr"] = torch.Tensor([1])
+    #
+    # for edge in g.edges():
+    #     g.edges[node]["attr"] = torch.Tensor([1])
+    dummy_label = torch.Tensor([1])
+    nx.set_edge_attributes(g, dummy_label, "attrs")
+    nx.set_node_attributes(g, dummy_label, "attrs")
+
+    # dummy_label.append(torch.Tensor([1]))
+
+    return g
+
 def ESWR(graph, n_graphs, size):
 
     possible_samplers = inspect.getmembers(samplers, inspect.isclass)
@@ -95,6 +116,7 @@ def ESWR(graph, n_graphs, size):
     # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
     sampler = MetropolisHastingsRandomWalkSampler(number_of_nodes=np.random.randint(12, 48))
     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
+    graphs = [add_attrs_to_graph(g) for g in graphs]
 
     return graphs
 
@@ -109,17 +131,17 @@ def get_fly_dataset(num = 2000):
     # data_objects = [pyg.utils.from_networkx(g) for g in nx_graph_list]
 
     for i, item in enumerate(nx_graph_list):
-        nx_graph_list[i] = pyg.utils.from_networkx(item)
+        nx_graph_list[i] = pyg.utils.from_networkx(item, group_edge_attrs=all, group_node_attrs=all)
 
 
     for i, data in enumerate(nx_graph_list):
         data.y = None # torch.Tensor([[0,0]])
-        data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
-        data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
+        data.edge_attr = data.edge_attr[:,0].reshape(-1,1)
+
+        # data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
+        # data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
         nx_graph_list[i] = data
 
-    for data in nx_graph_list:
-        print(data)
 
     return nx_graph_list# loader
 

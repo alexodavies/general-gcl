@@ -77,7 +77,7 @@ def from_ogb_dataset(dataset, target_y = torch.Tensor([[0,0]])):
 
     return
 
-def get_big_dataset(dataset, batch_size, transforms, num_social = 25000):
+def get_big_dataset(dataset, batch_size, transforms, num_social = 20000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
@@ -94,9 +94,9 @@ def get_big_dataset(dataset, batch_size, transforms, num_social = 25000):
         #     item.y = torch.Tensor([[0,0]])
         #     print(item.y)
 
-    for item in combined:
-        if item.y is not None:
-            print(item)
+    # for item in combined:
+    #     if item.y is not None:
+    #         print(item)
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social, stage="train")),
