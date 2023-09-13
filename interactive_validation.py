@@ -6,6 +6,7 @@ import wandb
 from datetime import datetime
 from tqdm import tqdm
 import os
+import yaml
 
 import matplotlib as mpl
 
@@ -417,6 +418,23 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
         # x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
 
 
+def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
+    # print(vars(original_cfg))
+    # original_cfg = vars(original_cfg)
+    original_keys = list(vars(original_cfg).keys())
+    wandb_keys = list(wandb_cfg.keys())
+
+
+    for key in original_keys:
+        if key not in wandb_keys:
+            continue
+
+        vars(original_cfg)[key] = wandb_cfg[key]['value']
+
+    return original_cfg
+
+
+
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -440,9 +458,43 @@ def run(args):
         checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
     else:
         checkpoint_path = f"outputs/{checkpoint}"
+        cfg_name = checkpoint.split('.')[0] + ".yaml"
+        config_path = f"outputs/{cfg_name}"
+
+        with open(config_path, 'r') as stream:
+            try:
+                # Converts yaml document to python object
+                wandb_cfg = yaml.safe_load(stream)
+
+                # Printing dictionary
+                print(wandb_cfg)
+            except yaml.YAMLError as e:
+                print(e)
+
+        args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
 
     print(f"Redo-views: {redo_views}")
+
+    model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+
+    # opening a file
+
+
+
+
+    model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                    proj_hidden_dim=args.emb_dim).to(device)
+
+    model.load_state_dict(model_dict['encoder_state_dict'])
+    # model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
+
+
+    view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                               mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
+    view_learner.load_state_dict(model_dict['view_state_dict'])
+    # view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
@@ -457,22 +509,6 @@ def run(args):
 
     # dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
     val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms)
-
-
-
-    model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-
-    model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                    proj_hidden_dim=args.emb_dim).to(device)
-
-    model.load_state_dict(model_dict['encoder_state_dict'])
-    # model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
-
-
-    view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                               mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-    view_learner.load_state_dict(model_dict['view_state_dict'])
-    # view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
     if redo_views:
         for i, loader in enumerate(val_loaders):
