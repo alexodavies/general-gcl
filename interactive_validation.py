@@ -83,8 +83,7 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-
-def vis_from_pyg(data, filename = None):
+def better_to_nx(data):
     edges = data.edge_index.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
 
@@ -96,9 +95,75 @@ def vis_from_pyg(data, filename = None):
     for ilabel in range(labels.shape[0]):
         if ilabel not in np.unique(edges):
             g.add_node(ilabel)
-    # labels = labels[dropped_nodes]
+    return g, labels
 
-    fig, ax = plt.subplots(figsize = (6,6))
+def average_degree(g):
+    return nx.number_of_edges(g)/nx.number_of_nodes(g)
+
+#
+def safe_diameter(g):
+    try:
+        return nx.diameter(g)
+    except:
+        return -1
+
+def four_cycles(g):
+    cycles = nx.simple_cycles(g, 4)
+    return len(list(cycles)) / g.order()
+
+def five_cycles(g):
+    cycles = nx.simple_cycles(g, 5)
+    return len(list(cycles)) / nx.number_of_nodes(g)
+
+def six_cycles(g):
+    cycles = nx.simple_cycles(g, 6)
+    return len(list(cycles)) / nx.number_of_nodes(g)
+
+def seven_cycles(g):
+    cycles = nx.simple_cycles(g, 7)
+    return len(list(cycles)) / nx.number_of_nodes(g)
+
+def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    val_data = []
+    for loader in loaders:
+        for batch in loader:
+            val_data += batch.to_data_list()
+
+    val_data = [better_to_nx(data)[0] for data in val_data]
+
+    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
+               average_degree, nx.average_clustering, nx.transitivity]
+
+    # embedder = PCA(n_components=n_components).fit(embeddings)
+    embedder = TruncatedSVD(n_components=n_components).fit(embeddings)
+
+    projection = embedder.transform(embeddings)
+
+    metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
+
+    for component in range(n_components):
+        projected = projection[:, component].flatten()
+
+        correlations = [np.corrcoef(projected[metric != -1], metric[metric != -1])[0,1] for metric in metric_arrays]
+        max_ind = np.argsort(correlations)[-1]
+
+        exp_variance = str(100*embedder.explained_variance_ratio_[component])[:5]
+        exp_corr = str(correlations[max_ind])[:5]
+        metric_name = str(metrics[max_ind]).split(' ')[1]
+
+        print(f"PCA component {component}, explained variance {exp_variance}%, correlated best with {metric_name} (R2: {exp_corr})")
+
+
+def vis_from_pyg(data, filename = None, ax = None):
+    g, labels = better_to_nx(data)
+    # labels = labels[dropped_nodes]
+    if ax is None:
+        fig, ax = plt.subplots(figsize = (6,6))
+        ax_was_none = True
+    else:
+        ax_was_none = False
 
     pos = nx.kamada_kawai_layout(g)
 
@@ -110,7 +175,10 @@ def vis_from_pyg(data, filename = None):
     ax.axis('off')
 
     plt.tight_layout()
-    if filename is None:
+
+    if not ax_was_none:
+        return ax
+    elif filename is None:
         plt.show()
     else:
         plt.savefig(filename)
@@ -118,66 +186,21 @@ def vis_from_pyg(data, filename = None):
 
     plt.close()
 
-def get_big_dataset(dataset, batch_size, transforms, num_social = 20000):
-    names = ["ogbg-molclintox"]
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+def vis_grid(datalist, filename):
 
-    split_idx = [data.get_idx_split() for data in datasets]
+    grid_dim = int(np.sqrt(len(datalist)))
 
-    datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
+    fig, axes = plt.subplots(grid_dim, grid_dim, figsize=(8,8))
+    axes = [num for sublist in axes for num in sublist]
 
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data) for i, data in enumerate(datasets)]
+    for i_axis, ax in enumerate(axes):
+        ax = vis_from_pyg(datalist[i_axis], ax = ax)
 
-    combined = FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset)
+    plt.savefig(filename)
 
-    for data in datasets:
-        combined += data
-        #     item.y = torch.Tensor([[0,0]])
-        #     print(item.y)
-
-    for item in combined:
-        if item.y is not None:
-            print(item)
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', num=num_social)),
-                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social, stage="train")),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', num=num_social))]
-
-    for data in social_datasets:
-        combined += data
-            # item.y = torch.Tensor([[0,0]])
-
-
-
-
-    return DataLoader(combined, batch_size=batch_size, shuffle=True), "Dummy"
-
-    #
-    # datasets = datasets + [get_fb_dataset(num = num_social),
-    #                   get_deezer(num=2 * num_social),
-    #                   get_cora_dataset(batch_size, num=num_social)]#,
-    #                   # get_community_dataset(batch_size, num = num_social),
-    #                   # get_random_dataset(batch_size, num = num_social)
-    #                   # ]
-
-    # large_dataset =
-
-    # return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-    #        names +  ["Molesol (target)", "Facebook", "Egos", "Cora"]#, "Communities", "Random"]
-
-    # out = torch.utils.data.ConcatDataset([datasets])
-    #
-    # return out
 
 def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
     names = ["ogbg-molclintox", "ogbg-molpcba"]
-
-
-    # datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
-
-    # split_idx = [data.get_idx_split() for data in datasets]
-
-    # datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
 
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
@@ -203,101 +226,12 @@ def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
     datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val", num=num_social) for i, data in enumerate(datasets)]
 
     datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-
-
-    # combined = dataset
-
-    # for data in datasets:
-    #     combined += data
-
-
-
     all_datasets = datasets + social_datasets
 
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-    # print(datasets)
-    # for data in social_datasets:
-    #     combined += data
-    #
-    # # combined = transforms(combined)
-    # print(combined)
+
 
     return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community", "roads", "fruit_fly"]
-
-    #
-    # datasets = datasets + [get_fb_dataset(num = num_social),
-    #                   get_deezer(num=2 * num_social),
-    #                   get_cora_dataset(batch_size, num=num_social)]#,
-    #                   # get_community_dataset(batch_size, num = num_social),
-    #                   # get_random_dataset(batch_size, num = num_social)
-    #                   # ]
-
-    # large_dataset =
-
-    # return [DataLoader(data, batch_size=batch_size) for data in datasets + [dataset]] +  social_loaders,\
-    #        names +  ["Molesol (target)", "Facebook", "Egos", "Cora"]#, "Communities", "Random"]
-
-    # out = torch.utils.data.ConcatDataset([datasets])
-    #
-    # return out
-
-def get_evaluators(dataset, evaluator):
-
-    task_type = ""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    for batch in dataset:
-        batch.to(device)
-        y = batch.y
-        # print(y)
-
-        if y is None:
-            task_type = "nodes"
-            print("Nodes")
-            break
-
-        else:
-            y = y[0]
-
-        if type(y) == int:
-            task_type = "graph-classification"
-            print("graph-classification")
-        elif type(y) == float:
-            task_type = "graph-regression"
-            print("graph-regression")
-        else:
-            task_type = "nodes"
-            print("Nodes")
-        break
-    try:
-        # if 'classification' in dataset.task_type:
-        if task_type == "graph-classification":
-            ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
-                                     evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-                                     param_search=True)
-            # ee = EmbeddingEvaluation(MLPClassifier(max_iter=2000),
-            #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-            #                          param_search=True)
-        elif task_type == "graph-regression":
-            ee = EmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
-                                     evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-                                     param_search=True)
-            # ee = EmbeddingEvaluation(MLPRegressor(max_iter=2000),
-            #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-            #                          param_search=True)
-        else:
-            ee = DummyEmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
-                                     evaluator, "", 0., device, params_dict=None,
-                                     param_search=True)
-    except:
-        ee = DummyEmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
-                                      evaluator, "", 0., device, params_dict=None,
-                                      param_search=True)
-    # else:
-    #     raise NotImplementedError
-
-    return ee
-
 
 def vis_vals(loader, dataset_name, num = 10000):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -308,23 +242,30 @@ def vis_vals(loader, dataset_name, num = 10000):
         os.mkdir(os.getcwd() + '/original_datasets/' + dataset_name + '/vals')
 
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/vals')
-    skip_all = True
-    for i in range(num):
-        if f"val-{i}.png" in existing_files:
-            print(f"Files already exist for {dataset_name}")
-            pass
-        else:
-            skip_all = False
-            break
-
-    if skip_all:
-        return
+    # skip_all = True
+    # for i in range(num):
+    #
+    #     if not skip_all:
+    #         break
+    #
+    #     if f"val-{i}.png" in existing_files:
+    #         # print(f"Files already exist for {dataset_name}")
+    #         pass
+    #     else:
+    #         skip_all = False
+    #         break
+    #
+    # if skip_all:
+    #     return
 
     val_data = []
     for batch in loader:
         val_data += batch.to_data_list()
 
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/vals')
+
+    vis_grid(val_data[:16], os.getcwd() + '/original_datasets/' + dataset_name + f'/val-grid-{dataset_name}.png')
+
     for i, data in enumerate(tqdm(val_data)):
         filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/vals/val-{i}.png'
         if i >= num or f"val-{i}.png" in existing_files:
@@ -340,9 +281,6 @@ def vis_vals(loader, dataset_name, num = 10000):
 def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = False):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-
-
-
     data_directory = os.getcwd() + '/original_datasets/' + dataset_name
 
     if "views" not in os.listdir(data_directory):
@@ -351,20 +289,25 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
 
 
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
-    skip_all = True
-    for i in range(num):
-        if f"view-{i}.png" in existing_files:
-            pass
-        else:
-            print(f"Files already exist for {dataset_name}")
-            skip_all = False
-            break
-
-    if skip_all:
-        return
+    # skip_all = True if not force_redo else False
+    # for i in range(num):
+    #
+    #     if not skip_all:
+    #         break
+    #
+    #     if f"view-{i}.png" in existing_files or not skip_all:
+    #         pass
+    #     else:
+    #         # print(f"Files already exist for {dataset_name}")
+    #         skip_all = False
+    #         break
+    #
+    # if skip_all:
+    #     return
 
 
     view_data = []
+    total_edges, total_dropped = 0, 0
 
     view_learner.eval()
     with torch.no_grad():
@@ -384,8 +327,9 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
             batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze()
 
             kept = torch.bernoulli(batch_aug_edge_weight).to(torch.bool)
-            print(f"Dropped {kept.shape[0] - torch.sum(kept)} edges out of {kept.shape[0]}")
 
+            total_edges += kept.shape[0]
+            total_dropped += kept.shape[0] - torch.sum(kept)
             # Kept is a boolean array of whether an edge is kept after the view
             datalist = batch.to_data_list()
             edges_so_far = 0
@@ -400,17 +344,22 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
             view_data += datalist
 
 
+    percent_dropped = str(100*int(total_dropped)/int(total_edges))[:5]
+    print(f"Dropped {percent_dropped}% of edges")
+    vis_grid(view_data[:16], os.getcwd() + '/original_datasets/' + dataset_name + f'/view-grid-{dataset_name}.png')
+
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
     for i, data in enumerate(tqdm(view_data)):
         filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/views/view-{i}.png'
 
 
+        if force_redo and i <= num:
+            vis_from_pyg(data, filename=filename)
 
-        if i >= num or f"view-{i}.png" in existing_files:
+        elif i >= num or f"view-{i}.png" in existing_files:
             # print(f"{filename} already exists")
             pass
-        elif force_redo and i <= num:
-            vis_from_pyg(data, filename=filename)
+
         else:
             vis_from_pyg(data, filename=filename)
 
@@ -433,9 +382,6 @@ def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
 
     return original_cfg
 
-
-
-
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -446,6 +392,7 @@ def run(args):
 
     num = args.num
     redo_views = args.redo_views
+    print(f"\n===================\nRedo-views: {redo_views}\n===================\n")
     checkpoint = args.checkpoint
 
     if checkpoint == "latest":
@@ -474,7 +421,7 @@ def run(args):
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
 
-    print(f"Redo-views: {redo_views}")
+    print(f"\n===================\nRedo-views: {redo_views}\n===================\n")
 
     model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
 
@@ -508,12 +455,12 @@ def run(args):
 
 
     # dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
-    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms)
+    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms, num_social=num)
 
-    if redo_views:
-        for i, loader in enumerate(val_loaders):
-            vis_vals(loader, names[i], num = num)
-            vis_views(view_learner, loader, names[i], num=num)
+    # if redo_views:
+    for i, loader in enumerate(val_loaders):
+        vis_vals(loader, names[i], num = num)
+        vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
 
     if 'classification' in dataset.task_type:
         ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
@@ -537,10 +484,13 @@ def run(args):
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
+    embeddings_vs_metrics(val_loaders, all_embeddings)
+    # quit()
+
     # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=4, verbose=1).fit(all_embeddings)
-    embedder = PCA(n_components=2).fit(all_embeddings)
+    # embedder = PCA(n_components=2).fit(all_embeddings)
     # embedder = FastICA(n_components=2).fit(all_embeddings)
-    # embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
+    embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
 
     x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
     ind_x, ind_y, ind_plot_names, ind_plot_paths, ind_view_paths = [], [], [], [], []
@@ -680,9 +630,10 @@ def run(args):
     p.x_range = Range1d(lower_lim_x, upper_lim_x)
     p.y_range = Range1d(lower_lim_y, upper_lim_y)
 
-    p.xaxis.axis_label = f"{embedder} 0"
-    p.yaxis.axis_label = f"{embedder} 1"
+    p.xaxis.axis_label = f"{embedder} 0 {embedder.explained_variance_ratio_[0]}"
+    p.yaxis.axis_label = f"{embedder} 1 {embedder.explained_variance_ratio_[1]}"
 
+    output_file("assets/img/Bokeh/bokeh-embedding-dashboard.html")
     show(p)
 
 
