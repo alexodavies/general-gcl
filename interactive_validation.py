@@ -1,53 +1,40 @@
 import argparse
+import concurrent.futures
+import glob
 import logging
-import random
-
-import wandb
-from datetime import datetime
-from tqdm import tqdm
 import os
-import yaml
+import random
+from datetime import datetime
 
 import matplotlib as mpl
-
-# from sklearnex import patch_sklearn
-# patch_sklearn()
-
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import torch
-from ogb.graphproppred import Evaluator
-from ogb.graphproppred import PygGraphPropPredDataset, GraphPropPredDataset
-from sklearn.linear_model import Ridge, LogisticRegression
-from sklearn.neural_network import MLPRegressor, MLPClassifier
-from torch_geometric.data import DataLoader, Data
+import yaml
+from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool
+from bokeh.plotting import figure, output_file, show, ColumnDataSource
+from hdbscan import HDBSCAN
+from ogb.graphproppred import PygGraphPropPredDataset
+from sklearn.decomposition import TruncatedSVD
+from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
-from torch_scatter import scatter
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-import networkx as nx
-from datasets.facebook_dataset import get_fb_dataset, FacebookDataset
-from datasets.ego_dataset import get_deezer, EgoDataset
-from datasets.community_dataset import get_community_dataset, CommunityDataset
-from datasets.cora_dataset import get_cora_dataset, CoraDataset
-from datasets.random_dataset import RandomDataset
-from datasets.neural_dataset import NeuralDataset
-from datasets.road_dataset import RoadDataset
+import wandb
+from datasets.community_dataset import CommunityDataset
+from datasets.cora_dataset import CoraDataset
+from datasets.ego_dataset import EgoDataset
+from datasets.facebook_dataset import FacebookDataset
 from datasets.from_ogb_dataset import FromOGBDataset
-
-from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
+from datasets.neural_dataset import NeuralDataset
+from datasets.random_dataset import RandomDataset
+from datasets.road_dataset import RoadDataset
+from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import MoleculeEncoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
-
-from umap import UMAP
-from sklearn.decomposition import PCA, FastICA, TruncatedSVD
-import glob
-from bokeh.plotting import figure, output_file, show, ColumnDataSource
-from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool
-from bokeh.palettes import d3, Spectral
-import bokeh.models as bmo
-
 
 
 def warn(*args, **kwargs):
@@ -65,7 +52,6 @@ def setup_wandb(cfg):
     returns:
     param: cfg: same config
     """
-    # config_dict = omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
 
     kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
               'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
@@ -84,81 +70,197 @@ def setup_seed(seed):
     random.seed(seed)
 
 def better_to_nx(data):
+    """
+    Converts a pytorch_geometric.data.Data object to a networkx graph,
+    robust to nodes with no edges, unlike the original pytorch_geometric version
+
+    Args:
+        data: pytorch_geometric.data.Data object
+
+    Returns:
+        g: a networkx.Graph graph
+        labels: torch.Tensor of node labels
+    """
     edges = data.edge_index.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
-
 
     g = nx.Graph()
     g.add_edges_from(edges)
 
-    # dropped_nodes = np.ones(labels.shape[0]).astype(bool)
     for ilabel in range(labels.shape[0]):
         if ilabel not in np.unique(edges):
             g.add_node(ilabel)
+
     return g, labels
 
 def average_degree(g):
     return nx.number_of_edges(g)/nx.number_of_nodes(g)
-
 #
 def safe_diameter(g):
+    """
+    Returns either the diameter of a graph or -1 if it has multiple components
+    Args:
+        g: networkx.Graph
+
+    Returns:
+        either the diameter of the graph or -1
+    """
     try:
         return nx.diameter(g)
     except:
         return -1
 
 def four_cycles(g):
+    """
+    Returns the number of 4-cycles in a graph, normalised by the number of nodes
+    """
     cycles = nx.simple_cycles(g, 4)
     return len(list(cycles)) / g.order()
 
-def five_cycles(g):
+def five_cycle_worker(g):
+    """
+    Returns the number of 5-cycles in a graph, normalised by the number of nodes
+    """
     cycles = nx.simple_cycles(g, 5)
     return len(list(cycles)) / nx.number_of_nodes(g)
 
-def six_cycles(g):
-    cycles = nx.simple_cycles(g, 6)
-    return len(list(cycles)) / nx.number_of_nodes(g)
+def five_cycles(graphs):
+    """
+    Returns the number of 5-cycles per graph in a list of graphs
+    Args:
+        graphs: list of networkx.Graph objects
 
-def seven_cycles(g):
-    cycles = nx.simple_cycles(g, 7)
-    return len(list(cycles)) / nx.number_of_nodes(g)
+    Returns:
+        list of 5-cycle counts
+    """
+    sample_ref = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
+        for n_coms in tqdm(executor.map(five_cycle_worker, graphs), desc="Five cycles"):
+            sample_ref.append(n_coms)
+
+    return sample_ref
 
 def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    """
+    Compute the correlations between a set of metrics and the SVD decomposition of an embedding
+    The results are currently printed in-terminal
 
+    Args:
+        loaders: set of dataloaders, used to reconstruct networkx.Graph s
+        embeddings: tensor or numpy array of embeddings from an encoder
+        n_components: the number of components against which to compute correlations
+
+    Returns:
+        None (currently)
+    """
+
+    # Iterate over items in loaders and convert to nx graphs, while removing selfloops
     val_data = []
     for loader in loaders:
         for batch in loader:
             val_data += batch.to_data_list()
 
     val_data = [better_to_nx(data)[0] for data in val_data]
+    for item in val_data:
+        item.remove_edges_from(nx.selfloop_edges(item))
 
-    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity]
 
-    # embedder = PCA(n_components=n_components).fit(embeddings)
+    # Project embedding using SVD
     embedder = TruncatedSVD(n_components=n_components).fit(embeddings)
-
     projection = embedder.transform(embeddings)
 
+    # Metrics can be added here - should take an nx graph as input and return a numerical value
+    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
+               average_degree, nx.average_clustering, nx.transitivity, four_cycles]
+
+    # Compute metrics for all graphs
     metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
 
+    # 5-cycles is multi-processed, so needs to be handled differently
+    metric_arrays += [np.array(five_cycles(val_data))]
+    metrics += ["five-cycles"]
+
+    # A little spaghetti but not too expensive compared to computing cycles
+    # Iterate over the components of the embedding, then iterate over the metric values
+    # to find correlations. The future version will probably produce a .csv
     for component in range(n_components):
         projected = projection[:, component].flatten()
 
         correlations = [np.corrcoef(projected[metric != -1], metric[metric != -1])[0,1] for metric in metric_arrays]
-        max_ind = np.argsort(correlations)[-1]
+        max_ind = np.argsort(np.abs(correlations))[-1]
 
         exp_variance = str(100*embedder.explained_variance_ratio_[component])[:5]
         exp_corr = str(correlations[max_ind])[:5]
-        metric_name = str(metrics[max_ind]).split(' ')[1]
+        try:
+            metric_name = str(metrics[max_ind]).split(' ')[1]
+        except:
+            metric_name = str(metrics[max_ind])
 
+        print("-"*40)
         print(f"PCA component {component}, explained variance {exp_variance}%, correlated best with {metric_name} (R2: {exp_corr})")
+        print("Extra detail:")
+        for i_metric, corr in enumerate(correlations):
+            metric = metrics[i_metric]
+            try:
+                metric_name = str(metric).split(' ')[1]
+            except:
+                metric_name = str(metric)
+            print(f"{metric_name} corr. {corr}")
 
+
+def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
+    """
+    Unfinished function to track how clusters form in the embedding space
+    Code is pretty identical to the function above
+    Args:
+        loaders: a set of validation loaders, used to retrieve networkx graphs
+        embeddings: torch tensor or numpy array of encoder embeddings
+        cluster_samples: both min_cluster_size and min_samples for HDBSCAN
+
+    Returns:
+
+    """
+    val_data = []
+    for loader in loaders:
+        for batch in loader:
+            val_data += batch.to_data_list()
+
+    val_data = [better_to_nx(data)[0] for data in val_data]
+    for item in val_data:
+        item.remove_edges_from(nx.selfloop_edges(item))
+
+    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
+               average_degree, nx.average_clustering, nx.transitivity]
+
+    metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
+
+    clusterer = HDBSCAN(min_cluster_size=cluster_samples, min_samples=cluster_samples).fit(embeddings)
+
+    predicted = clusterer.labels_
+    unique_clusters, cluster_counts = np.unique(predicted, return_counts=True)
+
+    for i_cluster in range(unique_clusters.shape[0]):
+        print(f"---------------\nCluster {unique_clusters[i_cluster]}, size {cluster_counts[i_cluster]}")
+        indices = np.arange(predicted.shape[0])[predicted == unique_clusters[i_cluster]]
+
+        specific_metrics = [metric[indices] for metric in metric_arrays]
+
+        for i, metric in enumerate(specific_metrics):
+            print(f"{str(metrics[i])}, mean {np.mean(metric)}, std dev {np.std(metric)}")
 
 def vis_from_pyg(data, filename = None, ax = None):
+    """
+    Visualise a pytorch_geometric.data.Data object
+    Args:
+        data: pytorch_geometric.data.Data object
+        filename: if passed, this is the filename for the saved image. Ignored if ax is not None
+        ax: matplotlib axis object, which is returned if passed
+
+    Returns:
+
+    """
     g, labels = better_to_nx(data)
-    # labels = labels[dropped_nodes]
     if ax is None:
         fig, ax = plt.subplots(figsize = (6,6))
         ax_was_none = True
@@ -187,10 +289,22 @@ def vis_from_pyg(data, filename = None, ax = None):
     plt.close()
 
 def vis_grid(datalist, filename):
+    """
+    Visualise a set of graphs, from pytorch_geometric.data.Data objects
+    Args:
+        datalist: list of pyg.data.Data objects
+        filename: the visualised grid is saved to this path
 
+    Returns:
+        None
+    """
+
+    # Trim to square root to ensure square grid
     grid_dim = int(np.sqrt(len(datalist)))
 
     fig, axes = plt.subplots(grid_dim, grid_dim, figsize=(8,8))
+
+    # Unpack axes
     axes = [num for sublist in axes for num in sublist]
 
     for i_axis, ax in enumerate(axes):
@@ -199,64 +313,83 @@ def vis_grid(datalist, filename):
     plt.savefig(filename)
 
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
-    names = ["ogbg-molclintox", "ogbg-molpcba"]
+def get_val_loaders(dataset, batch_size, transforms, num = 5000):
+    """
+    Get a list of validation loaders
 
-    social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
-                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social)),
-                       transforms(RandomDataset(os.getcwd()+'/original_datasets/'+'random', stage = "val", num=num_social)),
-                       transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num_social)),
-                       transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "val", num=num_social))]
+    Args:
+        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
+        batch_size: batch size for loaders
+        transforms: a set of transforms applied to the data
+        num: the maximum number of samples in each dataset (and therefore dataloader)
 
+    Returns:
+        datasets: list of dataloaders
+        names: name of each loaders respective dataset
 
+    """
+    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
 
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
+                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
+                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "val", num=num)),
+                       transforms(RandomDataset(os.getcwd() +'/original_datasets/' +'random', stage = "val", num=num)),
+                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
+                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num))]
+
+    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
+    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
     split_idx = [data.get_idx_split() for data in datasets]
 
+    # Get validation splits for each ogbg dataset, and trim if longer than num
     datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-
     dataset_lengths = [len(data) for data in datasets]
 
     for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num_social:
-            datasets[i] = data[:num_social]
+        if dataset_lengths[i] > num:
+            datasets[i] = data[:num]
 
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val", num=num_social) for i, data in enumerate(datasets)]
+    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + [i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
 
     datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
     all_datasets = datasets + social_datasets
 
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
 
-
-    return datasets, names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community", "roads", "fruit_fly"]
+    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community", "roads", "fruit_fly"]
 
 def vis_vals(loader, dataset_name, num = 10000):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    """
+    Visualise samples from a dataloader
+    Args:
+        loader: dataloader for the respective dataset
+        dataset_name: name under which to save images - should be in original_datasets
+        num: number of images to produce
 
+    Returns:
+        None
+    """
     data_directory = os.getcwd() + '/original_datasets/' + dataset_name
     if "vals" not in os.listdir(data_directory):
         print(f"Making {os.getcwd() + '/original_datasets/' + dataset_name + '/vals'}")
         os.mkdir(os.getcwd() + '/original_datasets/' + dataset_name + '/vals')
 
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/vals')
-    # skip_all = True
-    # for i in range(num):
-    #
-    #     if not skip_all:
-    #         break
-    #
-    #     if f"val-{i}.png" in existing_files:
-    #         # print(f"Files already exist for {dataset_name}")
-    #         pass
-    #     else:
-    #         skip_all = False
-    #         break
-    #
-    # if skip_all:
-    #     return
+    skip_all = True
+    for i in range(num):
+
+        if not skip_all:
+            break
+
+        if f"val-{i}.png" in existing_files:
+            pass
+        else:
+            skip_all = False
+            break
+
+    if skip_all:
+        return
 
     val_data = []
     for batch in loader:
@@ -269,16 +402,25 @@ def vis_vals(loader, dataset_name, num = 10000):
     for i, data in enumerate(tqdm(val_data)):
         filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/vals/val-{i}.png'
         if i >= num or f"val-{i}.png" in existing_files:
-            # print(f"{filename} already exists")
             pass
         else:
             vis_from_pyg(data, filename=filename)
 
 
-        # x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
-
-
 def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = False):
+    """
+    Visualise views/augmentations of samples in a dataloader
+    Args:
+        view_learner: the view learner (duh)
+        loader: dataloader for the respective dataset
+        dataset_name: name under which to save images - should be in original_datasets
+        num: number of images to produce
+        force_redo: whether to re-produce images that already exist (ie for a different view learner)
+
+    Returns:
+        None
+    """
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     data_directory = os.getcwd() + '/original_datasets/' + dataset_name
@@ -289,22 +431,20 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
 
 
     existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
-    # skip_all = True if not force_redo else False
-    # for i in range(num):
-    #
-    #     if not skip_all:
-    #         break
-    #
-    #     if f"view-{i}.png" in existing_files or not skip_all:
-    #         pass
-    #     else:
-    #         # print(f"Files already exist for {dataset_name}")
-    #         skip_all = False
-    #         break
-    #
-    # if skip_all:
-    #     return
+    skip_all = True if not force_redo else False
+    for i in range(num):
 
+        if not skip_all:
+            break
+
+        if f"view-{i}.png" in existing_files or not skip_all:
+            pass
+        else:
+            skip_all = False
+            break
+
+    if skip_all:
+        return
 
     view_data = []
     total_edges, total_dropped = 0, 0
@@ -313,9 +453,6 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            # print(ibatch, ibatch.ptr, ibatch.ptr.shape, ibatch.num_graphs, ibatch.edge_index)
-            # if len(view_data) > num:
-            #     break
             edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
 
             temperature = 1.0
@@ -364,15 +501,18 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
             vis_from_pyg(data, filename=filename)
 
 
-        # x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
-
-
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
-    # print(vars(original_cfg))
-    # original_cfg = vars(original_cfg)
+    """
+    Retrive wandb config from saved file
+    Args:
+        original_cfg: the config from this run
+        wandb_cfg: the saved config from the training run
+
+    Returns:
+        a config with values updated to those from the saved training run
+    """
     original_keys = list(vars(original_cfg).keys())
     wandb_keys = list(wandb_cfg.keys())
-
 
     for key in original_keys:
         if key not in wandb_keys:
@@ -420,78 +560,37 @@ def run(args):
 
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
-
-    print(f"\n===================\nRedo-views: {redo_views}\n===================\n")
-
+    # Retrieved saved models and load weights
     model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-
-
-    # opening a file
-
-
-
-
     model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                     proj_hidden_dim=args.emb_dim).to(device)
 
     model.load_state_dict(model_dict['encoder_state_dict'])
-    # model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
-
 
     view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                                mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
     view_learner.load_state_dict(model_dict['view_state_dict'])
-    # view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
-    evaluator = Evaluator(name=args.dataset)
+    # Get datasets
     my_transforms = Compose([initialize_edge_weight])
     dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
-
     split_idx = dataset.get_idx_split()
+    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms, num=num)
 
-    # train_loader = DataLoader(dataset[split_idx["train"]], batch_size=512, shuffle=True)
-    # valid_loader = DataLoader(dataset[split_idx["valid"]], batch_size=512, shuffle=False)
-    # test_loader = DataLoader(dataset[split_idx["test"]], batch_size=512, shuffle=False)
-
-
-    # dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
-    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms, num_social=num)
-
-    # if redo_views:
+    # Visualise
     for i, loader in enumerate(val_loaders):
         vis_vals(loader, names[i], num = num)
         vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
 
-    if 'classification' in dataset.task_type:
-        ee = EmbeddingEvaluation(LogisticRegression(dual=False, fit_intercept=True, max_iter=10000),
-                                 evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-                                 param_search=True)
-        # ee = EmbeddingEvaluation(MLPClassifier(max_iter=2000),
-        #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-        #                          param_search=True)
-    elif 'regression' in dataset.task_type:
-        ee = EmbeddingEvaluation(Ridge(fit_intercept=True, copy_X=True, max_iter=10000),
-                                 evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-                                 param_search=True)
-        # ee = EmbeddingEvaluation(MLPRegressor(max_iter=2000),
-        #                          evaluator, dataset.task_type, dataset.num_tasks, device, params_dict=None,
-        #                          param_search=True)
-    else:
-        raise NotImplementedError
-
+    # Get embeddings
     general_ee = GeneralEmbeddingEvaluation()
-
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    embeddings_vs_metrics(val_loaders, all_embeddings)
-    # quit()
-
-    # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=4, verbose=1).fit(all_embeddings)
-    # embedder = PCA(n_components=2).fit(all_embeddings)
-    # embedder = FastICA(n_components=2).fit(all_embeddings)
     embedder = TruncatedSVD(n_components=2).fit(all_embeddings)
 
+
+    #Prepare data for bokeh dashboard
     x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
     ind_x, ind_y, ind_plot_names, ind_plot_paths, ind_view_paths = [], [], [], [], []
 
@@ -507,24 +606,19 @@ def run(args):
 
         plot_names += len(proj_x)*[names[i]]
 
-        # ind_plot_names.append(len(proj_x)*[names[i]])
-
         ind_plot_names.append(names[i])
 
         img_root = os.getcwd() + '/original_datasets/' + names[i] + '/vals/*.png'
-        # print(img_root)
         img_paths = glob.glob(img_root)
 
         filenames = [int(filename.split('/')[-1][4:-4]) for filename in img_paths]
         sort_inds = np.argsort(filenames).tolist()
-        # print(img_paths)
         plot_paths += [img_paths[ind] for ind in sort_inds][:num]
 
         ind_plot_paths.append([img_paths[ind] for ind in sort_inds][:num])
 
 
         img_root = os.getcwd() + '/original_datasets/' + names[i] + '/views/*.png'
-        # print(img_root)
         img_paths = glob.glob(img_root)
 
         filenames = [int(filename.split('/')[-1][5:-4]) for filename in img_paths]
@@ -532,28 +626,6 @@ def run(args):
         view_paths += [img_paths[ind] for ind in sort_inds]
 
         ind_view_paths.append([img_paths[ind] for ind in sort_inds])
-
-
-
-    # print(x,y,plot_names,plot_paths)
-
-    print(len(x), len(y), len(plot_names), len(plot_paths), len(view_paths))
-    output_file("toolbar.html")
-
-
-
-    # scatter_source = ColumnDataSource(
-    #     data=dict(
-    #         x=x,
-    #         y=y,
-    #         desc=plot_names
-    #     )
-    # )
-
-    # <div>
-    #     <span style="font-size: 15px;">Location</span>
-    #     <span style="font-size: 10px; color: #696;">($x, $y)</span>
-    # </div>
 
     hover = HoverTool(
         tooltips="""
@@ -582,27 +654,14 @@ def run(args):
     p = figure(tools=[hover, BoxZoomTool(), WheelZoomTool(), UndoTool(), ResetTool()],
                title="Mouse over the dots", aspect_ratio = 16/8, lod_factor = 10)
 
-    palette = d3['Category10'][len(set(plot_names))]
-    color_map = bmo.CategoricalColorMapper(factors=tuple(set(plot_names)),
-                                           palette=palette)
-
     unique_names = np.arange(len(names))
 
     colors = [
         "#%02x%02x%02x" % (int(r), int(g), int(b)) for r, g, b, _ in 255 * mpl.cm.tab20(mpl.colors.Normalize()(unique_names))
     ]
 
-    print(len(names), len(ind_x), len(ind_y), len(ind_plot_paths), len(ind_view_paths))
     for i in range(len(names)):
         name = names[i]
-    # for i, name in enumerate(names):
-        print(name,
-              len(ind_x[i]),
-                len(ind_y[i]),
-                # desc= ind_x[i].shape[0] * [name],
-                len(ind_plot_paths[i]),
-                len(ind_view_paths[i]))
-
         source = ColumnDataSource(
             data=dict(
                 x=ind_x[i],
@@ -633,7 +692,7 @@ def run(args):
     p.xaxis.axis_label = f"{embedder} 0 {embedder.explained_variance_ratio_[0]}"
     p.yaxis.axis_label = f"{embedder} 1 {embedder.explained_variance_ratio_[1]}"
 
-    output_file("assets/img/Bokeh/bokeh-embedding-dashboard.html")
+    output_file("bokeh-embedding-dashboard.html")
     show(p)
 
 
@@ -674,16 +733,11 @@ def arg_parse():
 
     parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
 
-    # parser.add_argument('--seed', type=int, default=0)
-
     return parser.parse_args()
 
 
 if __name__ == '__main__':
 
     args = arg_parse()
-    # args = setup_wandb(args)
-    # print(args.dataset, repr(args))
-    # quit()
     run(args)
 
