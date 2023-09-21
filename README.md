@@ -5,7 +5,6 @@ Repository for our (ongoing) work on using adversarial graph constrastive learni
 
 An interactive version of the embedding space, through PCA, can be explored in-browser through `bokeh-embedding-dashboard.html`
 
-
 Code can be run through gcl_transfer.py, with arguments:
 
  - `--model-lr` learning rate for encoder

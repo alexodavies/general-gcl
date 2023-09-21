@@ -67,71 +67,116 @@ def setup_seed(seed):
     random.seed(seed)
 
 def get_big_dataset(dataset, batch_size, transforms, num_social = 20000):
+    """
+    Prepare a torch concat dataset dataloader
+    Args:
+        dataset: original dataset - hangover from early code, will be removed in future version
+        batch_size: batch size for dataloader
+        transforms: transforms applied to each dataset
+        num_social: number of graphs to sample for each dataset
+
+    Returns:
+        dataloader for concat dataset
+    """
+
+    # Open graph benchmark datasets
     names = ["ogbg-molclintox", "ogbg-molpcba"]
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
     split_idx = [data.get_idx_split() for data in datasets]
-
     datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
 
+    # Need to convert to pyg inmemorydataset
     datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num_social) for i, data in enumerate(datasets)]
-
     combined = FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, num=num_social)
 
+    # Concat dataset of ogb
     for data in datasets:
         combined += data
 
+    # Get other datasets (see /datasets/*)
     social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', num=num_social)),
                        transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', num=num_social, stage="train")),
                        transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', num=num_social)),
                        transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="train", num=num_social)),
                        transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "train", num=num_social))]
 
+    # Final concat dataset
     for data in social_datasets:
         combined += data
 
-    return DataLoader(combined, batch_size=batch_size, shuffle=True), "Dummy"
+    return DataLoader(combined, batch_size=batch_size, shuffle=True)
 
 
-def get_val_loaders(dataset, batch_size, transforms, num_social = 5000):
-    names = ["ogbg-molclintox", "ogbg-molpcba"]
+def get_val_loaders(dataset, batch_size, transforms, num = 5000):
+    """
+    Get a list of validation loaders
 
+    Args:
+        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
+        batch_size: batch size for loaders
+        transforms: a set of transforms applied to the data
+        num: the maximum number of samples in each dataset (and therefore dataloader)
 
-    social_datasets = [transforms(FacebookDataset(os.getcwd()+'/original_datasets/'+'facebook_large', stage = "val", num=num_social)),
-                       transforms(EgoDataset(os.getcwd()+'/original_datasets/'+'twitch_egos', stage = "val", num=num_social)),
-                       transforms(CoraDataset(os.getcwd()+'/original_datasets/'+'cora', stage = "val", num=num_social)),
-                       transforms(RandomDataset(os.getcwd()+'/original_datasets/'+'random', stage = "val", num=num_social)),
-                       transforms(CommunityDataset(os.getcwd()+'/original_datasets/'+'community', stage = "val", num=num_social)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num_social)),
-                       transforms(NeuralDataset(os.getcwd()+'/original_datasets/'+'fruit_fly', stage = "val", num=num_social))]
+    Returns:
+        datasets: list of dataloaders
+        names: name of each loaders respective dataset
 
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
+    """
+    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
+
+    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
+                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
+                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "val", num=num)),
+                       transforms(RandomDataset(os.getcwd() +'/original_datasets/' +'random', stage = "val", num=num)),
+                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
+                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num))]
+
+    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
+    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
     split_idx = [data.get_idx_split() for data in datasets]
 
+    # Get validation splits for each ogbg dataset, and trim if longer than num
     datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-
     dataset_lengths = [len(data) for data in datasets]
 
     for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num_social:
-            datasets[i] = data[:num_social]
+        if dataset_lengths[i] > num:
+            datasets[i] = data[:num]
 
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, stage = "val", num=num_social) for i, data in enumerate(datasets)]
+    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + [i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
 
     datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-
     all_datasets = datasets + social_datasets
 
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
 
-    return datasets, names + ["Molesol (target)", "Facebook", "Egos", "Cora", "Random", "Community", "Road", "Neurons"]
-
+    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "random", "community", "roads", "fruit_fly"]
 
 
 def train_epoch(dataloader,
                 model, model_optimizer,
                 view_learner, view_optimizer,
                 model_loss_all, view_loss_all, reg_all):
+    """
+    single train epoch for encoder and view learner
+
+    Args:
+        dataloader: dataloader (see get_big_dataset)
+        model: encoder
+        model_optimizer: optimizer for model
+        view_learner: view learner
+        view_optimizer: optimizer for view learner
+        model_loss_all: stores losses for each batch
+        view_loss_all: stores view losses for each batch
+        reg_all: stores regularization losses for each batch
+
+    Returns:
+        model_loss_all: loss for epoch
+        view_loss_all: view loss for epoch
+        reg_all: regularization loss for epoch
+    """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     for batch in tqdm(dataloader, leave = False):
@@ -231,7 +276,7 @@ def run(args):
     test_loader = DataLoader(dataset[split_idx["test"]], batch_size=512, shuffle=False)
 
 
-    dataloader, names = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
+    dataloader = get_big_dataset(dataset[split_idx["train"]], args.batch_size, my_transforms)
     val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms)
 
     model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
