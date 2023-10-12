@@ -542,7 +542,7 @@ class GeneralEmbeddingEvaluation():
 				wandb.log({name: score})
 			# elif evaluator.task != "empty":
 			print(f"\nName: {name}\n Score: {score}\n Task: {evaluator.task}\n N samples: {evaluator.n_samples}")
-			total_score += score
+			total_score += score * evaluator.n_samples
 
 		if use_wandb:
 			wandb.log({"Total Val Score":total_score})
