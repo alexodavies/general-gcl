@@ -52,7 +52,7 @@ def setup_wandb(cfg):
     param: cfg: same config
     """
 
-    kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
+    kwargs = {'name': f"general-gcl-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
               'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
