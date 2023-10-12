@@ -441,7 +441,7 @@ def run(args):
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                  test_loader, vis = True)
 
-    general_ee.embedding_evaluation(model.encoder, val_loaders, names)
+    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))
