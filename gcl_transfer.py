@@ -364,13 +364,13 @@ def run(args):
     general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
-    general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-    for ee in evaluators:
-        train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
-        general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, use_wandb=False)
-        logging.info(
-            "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
-                                                                                             test_score))
+    # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
+    # for ee in evaluators:
+    train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
+    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, use_wandb=False)
+    logging.info(
+        "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
+                                                                                         test_score))
 
     model_losses = []
     view_losses = []
