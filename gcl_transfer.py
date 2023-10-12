@@ -367,7 +367,7 @@ def run(args):
     # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
     # for ee in evaluators:
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
-    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, use_wandb=False)
+    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
     logging.info(
         "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
                                                                                          test_score))
@@ -415,7 +415,7 @@ def run(args):
             for ee in evaluators:
                 train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                              test_loader, vis=True)
-                general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, use_wandb=False)
+                general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
                 total_val += val_score
                 total_train += train_score
 
