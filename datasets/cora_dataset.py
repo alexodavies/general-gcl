@@ -22,7 +22,7 @@ def five_cycle_worker(g):
     """
     Returns the number of 5-cycles in a graph, normalised by the number of nodes
     """
-    cycles = nx.simple_cycles(g, 5)
+    cycles = nx.simple_cycles(g, length_bound = 5)
     return len(list(cycles))
 
 def vis_from_pyg(data, filename = None):

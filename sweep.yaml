@@ -31,4 +31,4 @@ parameters:
     distribution: uniform
     max: 0.004
     min: 0.0001
-program: gcl_transfer_improved.py
+program: gcl_transfer.py

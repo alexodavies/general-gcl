@@ -20,7 +20,7 @@ def four_cycles(g):
     """
     Returns the number of 4-cycles in a graph, normalised by the number of nodes
     """
-    cycles = nx.simple_cycles(g, 4)
+    cycles = nx.simple_cycles(g, length_bound=4)
     return len(list(cycles))
 
 def load_fly(return_tensor = False):
