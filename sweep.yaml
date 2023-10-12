@@ -1,0 +1,34 @@
+method: bayes
+metric:
+  goal: minimize
+  name: Total Val Score
+parameters:
+  batch_size:
+    distribution: int_uniform
+    max: 512
+    min: 128
+  emb_dim:
+    distribution: int_uniform
+    max: 600
+    min: 150
+  mlp_edge_model_dim:
+    distribution: int_uniform
+    max: 512
+    min: 32
+  model_lr:
+    distribution: uniform
+    max: 0.004
+    min: 0.0001
+  num_gc_layers:
+    distribution: int_uniform
+    max: 10
+    min: 1
+  reg_lambda:
+    distribution: uniform
+    max: 7
+    min: 0.05
+  view_lr:
+    distribution: uniform
+    max: 0.004
+    min: 0.0001
+program: gcl_transfer_improved.py
