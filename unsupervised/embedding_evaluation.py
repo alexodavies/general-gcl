@@ -459,7 +459,7 @@ class TargetEvaluation():
 
 		if self.task == "classification":
 			try:
-				score = roc_auc_score(val_targets, pred_target, average="macro", multi_class="ovr")
+				score = 1 - roc_auc_score(val_targets, pred_target, average="macro", multi_class="ovr")
 			except:
 				score = f1_score(val_targets, pred_target, average="macro")
 				self.task = "multiclass-classification"
