@@ -13,9 +13,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from umap import UMAP
 from torch_geometric.data import DataLoader
 import wandb
+from tqdm import tqdm
 
-from sklearn.linear_model import Ridge, LogisticRegression
-from sklearn.metrics import f1_score
+from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression, LinearRegression
+from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
@@ -401,11 +402,13 @@ class TargetEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	def evaluate(self, embedding, loader, name):
-		targets = []
-		print(name)
-		for batch in loader:
+	def evaluate(self, train_embedding, val_embedding, train_loader, val_loader, name):
+
+		val_targets = []
+		for batch in val_loader:
 			if batch.y is None or name == "ogbg-molpcba":
+				self.task = "empty"
+				self.n_samples = 0
 				return 0.
 
 			else:
@@ -418,30 +421,59 @@ class TargetEvaluation():
 				else:
 					selected_y = selected_y.cpu().numpy().tolist()
 
-				targets += selected_y
-		targets = self.tidy_labels(targets).flatten()
-		if type(targets[0]) is int or type(targets[0]) is np.int64:
+				val_targets += selected_y
+		val_targets = self.tidy_labels(val_targets).flatten()
+
+		train_targets = []
+		for batch in train_loader:
+			if batch.y is None or name == "ogbg-molpcba":
+				self.task = "empty"
+				self.n_samples = 0
+				return 0.
+
+			else:
+				selected_y = batch.y
+				if type(selected_y) is list:
+					selected_y = torch.Tensor(selected_y)
+
+				if selected_y.dim() > 1:
+					selected_y = [selected_y[i, :].cpu().numpy().tolist() for i in range(selected_y.shape[0])]
+				else:
+					selected_y = selected_y.cpu().numpy().tolist()
+
+				train_targets += selected_y
+		train_targets = self.tidy_labels(train_targets).flatten()
+
+		self.n_samples = val_targets.shape[0]
+		if type(val_targets[0]) is int or type(val_targets[0]) is np.int64:
 			self.task = "classification"
 		else:
 			self.task = "regression"
 
 		self.setup_models()
 
-		self.model.fit(embedding, targets)
-		pred_target = self.model.predict(embedding)
+		self.model.fit(train_embedding, train_targets)
+		pred_target = self.model.predict(val_embedding)
+
+		self.histogram_preds(val_targets, pred_target, name)
 
 		if self.task == "classification":
-			score = 1 - f1_score(targets, pred_target)
+			try:
+				score = roc_auc_score(val_targets, pred_target, average="macro", multi_class="ovr")
+			except:
+				score = f1_score(val_targets, pred_target, average="macro")
+				self.task = "multiclass-classification"
+			# score = 1 - f1_score(targets, pred_target, average="macro")
 		else:
-			score = np.mean((targets - pred_target)**2)
+			score = mean_squared_error(val_targets, pred_target, squared=False)#np.mean((targets - pred_target)**2)
 
 		return score
 
 	def setup_models(self):
 		if self.task == "classification":
-			self.model = LogisticRegression(dual=False, fit_intercept=True, max_iter=10000)
+			self.model = LogisticRegression(dual=False, fit_intercept=True)
 		elif self.task == "regression":
-			self.model = Ridge(fit_intercept=True, copy_X=True, max_iter=10000)
+			self.model = LinearRegression()#Ridge(fit_intercept=True, copy_X=True)
 
 
 	def tidy_labels(self, labels):
@@ -469,7 +501,18 @@ class TargetEvaluation():
 		else:
 			return np.array(labels)
 
+	def histogram_preds(self, target, pred, name):
 
+		fig, ax = plt.subplots(figsize=(6,4))
+
+		ax.hist([target, pred], label=["target", "pred"], bins=50)
+		ax.set_yscale('log')
+		ax.legend(shadow=True)
+		plt.tight_layout()
+
+		plt.savefig(f"outputs/{name}.png")
+
+		plt.close()
 
 
 
@@ -477,32 +520,39 @@ class GeneralEmbeddingEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	def embedding_evaluation(self, encoder, loaders, names):
-		all_embeddings, separate_embeddings = self.get_embeddings(encoder, loaders)
-		self.centroid_similarities(separate_embeddings, names)
-		self.vis(all_embeddings, separate_embeddings, names)
+	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names, use_wandb=True):
+		train_all_embeddings, train_separate_embeddings = self.get_embeddings(encoder, train_loaders)
+		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders)
+		if use_wandb:
+			self.centroid_similarities(val_separate_embeddings, names)
+			self.vis(val_all_embeddings, val_separate_embeddings, names)
 
 		total_score = 0.
 
-		for i_embedding, embedding in enumerate(separate_embeddings):
-			loader = loaders[i_embedding]
+		for i_embedding, val_embedding in enumerate(val_separate_embeddings):
+			val_loader = val_loaders[i_embedding]
+			train_loader = train_loaders[i_embedding]
+			train_embedding = train_separate_embeddings[i_embedding]
+
 			name = names[i_embedding]
 			evaluator = TargetEvaluation()
-			score = evaluator.evaluate(embedding, loader, name)
+			score = evaluator.evaluate(train_embedding, val_embedding, train_loader, val_loader, name)
 
-			wandb.log({name: score})
+			if use_wandb:
+				wandb.log({name: score})
+			# elif evaluator.task != "empty":
+			print(f"\nName: {name}\n Score: {score}\n Task: {evaluator.task}\n N samples: {evaluator.n_samples}")
 			total_score += score
 
-		wandb.log({"Total Val Score":total_score})
+		if use_wandb:
+			wandb.log({"Total Val Score":total_score})
 
-	def get_embeddings(self, encoder, loaders):
+	def get_embeddings(self, encoder, loaders, use_wandb=True):
 		encoder.eval()
 		all_embeddings = None
 		separate_embeddings = []
 		# colours = []
-		for i, loader in enumerate(loaders):
-			# print(loader, encoder)
-			print(f"Loader {i}")
+		for i, loader in enumerate(tqdm(loaders, leave = False, desc = "Getting embeddings")):
 			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False, every=1)
 			separate_embeddings.append(train_emb)
 			if all_embeddings is None:

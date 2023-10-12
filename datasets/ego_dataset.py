@@ -91,9 +91,6 @@ def get_deezer(num = 49152, include_targets = False):
     data_objects = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in graphs]
 
 
-    for data in data_objects:
-        print(data.x.shape, data.edge_index.shape)
-
     for id, data in enumerate(data_objects):
         if include_targets:
             data.y = id_to_target[id]

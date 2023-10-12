@@ -7,7 +7,7 @@ from torch_geometric.utils.convert import to_networkx
 from tqdm import tqdm
 import os
 
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import InMemoryDataset, Data
 import inspect
 from littleballoffur.exploration_sampling import *
 import littleballoffur.exploration_sampling as samplers
@@ -16,18 +16,23 @@ import pickle
 import zipfile
 import wget
 
+def four_cycles(g):
+    """
+    Returns the number of 4-cycles in a graph, normalised by the number of nodes
+    """
+    cycles = nx.simple_cycles(g, 4)
+    return len(list(cycles))
+
 def load_fly(return_tensor = False):
     pwd = os.getcwd()
 
     zip_url = "https://www.kaggle.com/datasets/alexanderowendavies/fruit-fly-larva-brain/download" #?datasetVersionNumber=1"
 
     start_dir = os.getcwd()
-    print(os.getcwd())
     # print(os.getcwd(), os.listdir())
     os.chdir("fruit_fly")
     os.chdir("Supplementary-Data-S1")
 
-    print(os.getcwd())
 
 
     data_path = os.path.join(os.getcwd(), "all-all_connectivity_matrix.csv")
@@ -51,7 +56,7 @@ def load_fly(return_tensor = False):
     fly_mat[fly_mat > 2] = 1
     fly_mat[np.identity(fly_mat.shape[0], dtype=bool)] = 0.
     fly_graph = fly_mat
-    print(f"Graph with {fly_graph.shape[0]} nodes and {np.sum(fly_graph)} edges")
+    # print(f"Graph with {fly_graph.shape[0]} nodes and {np.sum(fly_graph)} edges")
 
     nx_graph = nx.from_numpy_array(fly_graph, create_using=nx.Graph)
 
@@ -121,7 +126,7 @@ def ESWR(graph, n_graphs, size):
 
     return graphs
 
-def get_fly_dataset(num = 2000):
+def get_fly_dataset(num = 2000, targets = False):
     fb_graph = load_fly()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
@@ -132,20 +137,23 @@ def get_fly_dataset(num = 2000):
     #                                           batch_size=batch_size)
     # data_objects = [pyg.utils.from_networkx(g) for g in nx_graph_list]
 
-    for i, item in enumerate(nx_graph_list):
-        nx_graph_list[i] = pyg.utils.from_networkx(item, group_edge_attrs=all, group_node_attrs=all)
+    # for i, item in enumerate(nx_graph_list):
+    #     nx_graph_list[i] = pyg.utils.from_networkx(item, group_edge_attrs=all, group_node_attrs=all)
+    datalist = [pyg.utils.from_networkx(item, group_edge_attrs=all, group_node_attrs=all) for item in nx_graph_list]
 
-
-    for i, data in enumerate(nx_graph_list):
-        data.y = None # torch.Tensor([[0,0]])
+    for i, data in enumerate(datalist):
+        if targets:
+            data.y = torch.tensor(four_cycles(nx_graph_list[i]) * 0.01, dtype=float)
+        else:
+            data.y = None # torch.Tensor([[0,0]])
         data.edge_attr = data.edge_attr[:,0].reshape(-1,1)
 
         # data.edge_attr = torch.ones(data.edge_index.shape[1]).to(torch.int).reshape((-1, 1))
         # data.x = torch.ones(data.num_nodes).to(torch.int).reshape((-1, 1))
-        nx_graph_list[i] = data
+        datalist[i] = data
 
 
-    return nx_graph_list# loader
+    return datalist# loader
 
 class NeuralDataset(InMemoryDataset):
     def __init__(self, root, stage="train", transform=None, pre_transform=None, pre_filter=None, num = 2000):
@@ -175,10 +183,47 @@ class NeuralDataset(InMemoryDataset):
         # Read data into huge `Data` list.
 
         if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
-            print("Facebook files exist")
+            print("Connectome files exist")
             return
 
-        data_list = get_fly_dataset(num=self.num)
+        data_list = get_fly_dataset(num=self.num, targets=self.stage != "train")
+
+        if self.stage == "train":
+            print("Found stage train, dropping targets")
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = None)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = None)
+                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}, edge attr {data.edge_attr.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+        else:
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+
+                data = Data(x = item.x,# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = item.y)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = item.y)
+                # print(f"Val x shape {data.x.shape}, edge index {data.edge_index.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]

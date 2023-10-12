@@ -25,6 +25,7 @@ from datasets.cora_dataset import get_cora_dataset, CoraDataset
 from datasets.random_dataset import get_random_dataset, RandomDataset
 from datasets.neural_dataset import NeuralDataset
 from datasets.road_dataset import RoadDataset
+from datasets.tree_dataset import TreeDataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
@@ -263,7 +264,7 @@ def run(args):
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
-    setup_seed(args.seed)
+    # setup_seed(args.seed)
 
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])

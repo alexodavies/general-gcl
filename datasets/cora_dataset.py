@@ -3,7 +3,7 @@ import networkx as nx
 import torch
 from tqdm import tqdm
 import torch_geometric as pyg
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils.convert import to_networkx
 from torch_geometric.io import read_npz
 # import osmnx as ox
@@ -17,6 +17,13 @@ import numpy as np
 import inspect
 from littleballoffur.exploration_sampling import *
 import littleballoffur.exploration_sampling as samplers
+
+def five_cycle_worker(g):
+    """
+    Returns the number of 5-cycles in a graph, normalised by the number of nodes
+    """
+    cycles = nx.simple_cycles(g, 5)
+    return len(list(cycles))
 
 def vis_from_pyg(data, filename = None):
     edges = data.edge_index.T.cpu().numpy()
@@ -68,7 +75,7 @@ def download_cora(visualise = False):
 
     for node in list(G.nodes()):
         # class_tensor = base_tensor.clone()
-        class_tensor = torch.Tensor([1])#node_classes[node]])#node_classes[node]
+        class_tensor = torch.Tensor([node_classes[node]])#node_classes[node]
 
         # print(class_tensor, node_classes[node])
 
@@ -106,7 +113,7 @@ def ESWR(graph, n_graphs, size):
 
     return graphs
 
-def get_cora_dataset(num = 2000):
+def get_cora_dataset(num = 2000, targets = False):
     fb_graph = download_cora()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
@@ -115,8 +122,11 @@ def get_cora_dataset(num = 2000):
     #                                           batch_size=batch_size)
 
     data_objects = [pyg.utils.from_networkx(g, group_node_attrs=all, group_edge_attrs=all) for g in nx_graph_list]
-    for data in data_objects:
-        data.y = None #torch.Tensor([[0,0]])
+    for i_data, data in enumerate(tqdm(data_objects, desc="Calculating five cycle values for cora", leave=False)):
+        if targets:
+            data.y = torch.tensor(five_cycle_worker(nx_graph_list[i_data]) * 0.01) # None # torch.Tensor([[0,0]])
+        else:
+            data.y = torch.tensor([1])
 
     return  data_objects# loader
 
@@ -150,7 +160,44 @@ class CoraDataset(InMemoryDataset):
             print("Cora files exist")
             return
 
-        data_list = get_cora_dataset(num=self.num)
+        data_list = get_cora_dataset(num=self.num, targets=self.stage != "train")
+
+        if self.stage == "train":
+            print("Found stage train, dropping targets")
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = None)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = None)
+                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}, edge attr {data.edge_attr.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+        else:
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+
+                data = Data(x = item.x,# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = item.y)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = item.y)
+                # print(f"Val x shape {data.x.shape}, edge index {data.edge_index.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]

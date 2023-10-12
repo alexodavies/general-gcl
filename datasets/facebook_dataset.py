@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 import torch_geometric as pyg
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import InMemoryDataset, Data
 # import osmnx as ox
 from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSampler
 # from ToyDatasets import *
@@ -59,7 +59,7 @@ def download_reddit(visualise = False):
     start_dir = os.getcwd()
     # for _ in range(3):
     #     os.chdir('../')
-    print(os.getcwd(), os.listdir())
+    # print(os.getcwd(), os.listdir())
     os.chdir("original_datasets")
 
     if "reddit-graph.npz" in os.listdir():
@@ -148,7 +148,7 @@ def download_facebook(visualise = False):
     graph = nx.Graph()
     label_specific = labels["page_type"]
     for col in labels["id"]:
-        graph.add_node(int(col), attrs = torch.Tensor([1]))#conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
+        graph.add_node(int(col), attrs = conversion_dict[label_specific[col]]) # one_hot_embeddings[col].astype(float))
     # print(edgelist)
     sources = edgelist["id_1"].to_numpy().astype("int")
     targets = edgelist["id_2"].to_numpy().astype("int")
@@ -166,7 +166,7 @@ def download_facebook(visualise = False):
             graph.remove_node(node[0])
 
     graph = nx.convert_node_labels_to_integers(graph)
-    print(f"Facebook {graph}")
+    # print(f"Facebook {graph}")
 
     CGs = [graph.subgraph(c) for c in nx.connected_components(graph)]
     CGs = sorted(CGs, key=lambda x: x.number_of_nodes(), reverse=True)
@@ -203,7 +203,7 @@ def ESWR(graph, n_graphs, size):
 
     return graphs
 
-def get_fb_dataset(num = 2000):
+def get_fb_dataset(num = 2000, targets = False):
     fb_graph = download_facebook()
     # print(fb_graph.nodes(data=True))
     nx_graph_list = ESWR(fb_graph, num, 48)
@@ -215,8 +215,11 @@ def get_fb_dataset(num = 2000):
 
 
 
-    for data in data_objects:
-        data.y = None # torch.Tensor([[0,0]])
+    for i_data, data in enumerate(tqdm(data_objects, desc="Calculating clustering values for FB", leave=False)):
+        if targets:
+            data.y = torch.tensor(nx.average_clustering(nx_graph_list[i_data])) # None # torch.Tensor([[0,0]])
+        else:
+            data.y = torch.tensor([1.])
 
     return data_objects# loader
 
@@ -251,7 +254,45 @@ class FacebookDataset(InMemoryDataset):
             print("Facebook files exist")
             return
 
-        data_list = get_fb_dataset(num=self.num)
+        data_list = get_fb_dataset(num=self.num, targets=self.stage != "train")
+
+        if self.stage == "train":
+            print("Found stage train, dropping targets")
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = None)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = None)
+                # print(f"Train x shape {data.x.shape}, edge index {data.edge_index.shape}, edge attr {data.edge_attr.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+        else:
+            new_data_list = []
+            for i, item in enumerate(data_list):
+                n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
+
+
+                data = Data(x = item.x,# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                            edge_index=item.edge_index,
+                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            y = item.y)
+
+                # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,
+                #             edge_attr=item.edge_attr, y = item.y)
+                # print(f"Val x shape {data.x.shape}, edge index {data.edge_index.shape}")
+                # print(data)
+                # vis_from_pyg(data, filename=self.root + '/processed/' + i + '.png')
+                new_data_list.append(data)
+            data_list = new_data_list
+
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]

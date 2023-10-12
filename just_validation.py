@@ -113,6 +113,7 @@ class ComponentSlicer:
     def transform(self, X):
         return np.concatenate((X[:, self.comp_1].reshape(-1,1), X[:, self.comp_2].reshape(-1,1)), axis=1)
 
+
 def average_degree(g):
     return nx.number_of_edges(g)/nx.number_of_nodes(g)
 #
@@ -192,14 +193,14 @@ def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
 
     # Metrics can be added here - should take an nx graph as input and return a numerical value
     metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity]
+               average_degree, nx.average_clustering, nx.transitivity, four_cycles]
 
     # Compute metrics for all graphs
     metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
 
     # 5-cycles is multi-processed, so needs to be handled differently
-    # metric_arrays += [np.array(five_cycles(val_data))]
-    # metrics += ["five-cycles"]
+    metric_arrays += [np.array(five_cycles(val_data))]
+    metrics += ["five-cycles"]
 
     # A little spaghetti but not too expensive compared to computing cycles
     # Iterate over the components of the embedding, then iterate over the metric values
@@ -269,70 +270,58 @@ def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
         for i, metric in enumerate(specific_metrics):
             print(f"{str(metrics[i])}, mean {np.mean(metric)}, std dev {np.std(metric)}")
 
-def vis_from_pyg(data, filename = None, ax = None):
+
+
+
+def get_test_loaders(dataset, batch_size, transforms, num = 5000):
     """
-    Visualise a pytorch_geometric.data.Data object
+    Get a list of validation loaders
+
     Args:
-        data: pytorch_geometric.data.Data object
-        filename: if passed, this is the filename for the saved image. Ignored if ax is not None
-        ax: matplotlib axis object, which is returned if passed
+        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
+        batch_size: batch size for loaders
+        transforms: a set of transforms applied to the data
+        num: the maximum number of samples in each dataset (and therefore dataloader)
 
     Returns:
+        datasets: list of dataloaders
+        names: name of each loaders respective dataset
 
     """
-    g, labels = better_to_nx(data)
-    if ax is None:
-        fig, ax = plt.subplots(figsize = (6,6))
-        ax_was_none = True
-    else:
-        ax_was_none = False
+    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
 
-    pos = nx.kamada_kawai_layout(g)
+    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "test", num=num)),
+                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "test", num=num)),
+                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "test", num=num)),
+                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="test", num=num)),
+                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "test", num=num)),
+                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "test", num=num)),
+                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "test", num=num)),
+                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="test", num=num)),
+                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "test", num=num))
+                       ]
 
-    nx.draw_networkx_edges(g, pos = pos, ax = ax)
-    if np.unique(labels).shape[0] != 1:
-        nx.draw_networkx_nodes(g, pos=pos, node_color=labels, cmap="tab20", node_size=64,
-                               vmin=0, vmax=20, ax=ax)
+    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
+    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
+    split_idx = [data.get_idx_split() for data in datasets]
 
-    ax.axis('off')
-    ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
+    # Get validation splits for each ogbg dataset, and trim if longer than num
+    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
+    dataset_lengths = [len(data) for data in datasets]
 
-    plt.tight_layout()
+    for i, data in enumerate(datasets):
+        if dataset_lengths[i] > num:
+            datasets[i] = data[:num]
+    print("\n", datasets, "\n")
+    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "test", num=num) for i, data in enumerate(datasets)]
 
-    if not ax_was_none:
-        return ax
-    elif filename is None:
-        plt.show()
-    else:
-        plt.savefig(filename)
-        plt.close()
+    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "test")]
+    all_datasets = datasets + social_datasets
 
-    plt.close()
+    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
 
-def vis_grid(datalist, filename):
-    """
-    Visualise a set of graphs, from pytorch_geometric.data.Data objects
-    Args:
-        datalist: list of pyg.data.Data objects
-        filename: the visualised grid is saved to this path
-
-    Returns:
-        None
-    """
-
-    # Trim to square root to ensure square grid
-    grid_dim = int(np.sqrt(len(datalist)))
-
-    fig, axes = plt.subplots(grid_dim, grid_dim, figsize=(8,8))
-
-    # Unpack axes
-    axes = [num for sublist in axes for num in sublist]
-
-    for i_axis, ax in enumerate(axes):
-        ax = vis_from_pyg(datalist[i_axis], ax = ax)
-
-    plt.savefig(filename)
-
+    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
+                                   "trees", "lattice", "random", "community"]
 
 def get_val_loaders(dataset, batch_size, transforms, num = 5000):
     """
@@ -349,7 +338,7 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
         names: name of each loaders respective dataset
 
     """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
+    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
 
     social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
                        transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
@@ -367,7 +356,7 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
     split_idx = [data.get_idx_split() for data in datasets]
 
     # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
+    datasets = [data[split_idx[i]["test"]] for i, data in enumerate(datasets)]
     dataset_lengths = [len(data) for data in datasets]
 
     for i, data in enumerate(datasets):
@@ -384,195 +373,6 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
     return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
                                    "trees", "lattice", "random", "community"]
 
-def get_train_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "train", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "train", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "train", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="train", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "train", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "train", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "train", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="train", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "train", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
-
-def vis_vals(loader, dataset_name, num = 10000):
-    """
-    Visualise samples from a dataloader
-    Args:
-        loader: dataloader for the respective dataset
-        dataset_name: name under which to save images - should be in original_datasets
-        num: number of images to produce
-
-    Returns:
-        None
-    """
-    data_directory = os.getcwd() + '/original_datasets/' + dataset_name
-    if "vals" not in os.listdir(data_directory):
-        print(f"Making {os.getcwd() + '/original_datasets/' + dataset_name + '/vals'}")
-        os.mkdir(os.getcwd() + '/original_datasets/' + dataset_name + '/vals')
-
-    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/vals')
-    skip_all = True
-    for i in range(num):
-
-        if not skip_all:
-            break
-
-        if f"val-{i}.png" in existing_files:
-            pass
-        else:
-            skip_all = False
-            break
-
-    if skip_all:
-        return
-
-    val_data = []
-    for batch in loader:
-        val_data += batch.to_data_list()
-
-    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/vals')
-
-    vis_grid(val_data[:16], os.getcwd() + '/original_datasets/' + dataset_name + f'/val-grid-{dataset_name}.png')
-
-    for i, data in enumerate(tqdm(val_data)):
-        filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/vals/val-{i}.png'
-        if i >= num or f"val-{i}.png" in existing_files:
-            pass
-        else:
-            vis_from_pyg(data, filename=filename)
-
-def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = False):
-    """
-    Visualise views/augmentations of samples in a dataloader
-    Args:
-        view_learner: the view learner (duh)
-        loader: dataloader for the respective dataset
-        dataset_name: name under which to save images - should be in original_datasets
-        num: number of images to produce
-        force_redo: whether to re-produce images that already exist (ie for a different view learner)
-
-    Returns:
-        None
-    """
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    data_directory = os.getcwd() + '/original_datasets/' + dataset_name
-
-    if "views" not in os.listdir(data_directory):
-        print(f"Making {os.getcwd() + '/original_datasets/' + dataset_name + '/views'}")
-        os.mkdir(os.getcwd() + '/original_datasets/' + dataset_name + '/views')
-
-
-    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
-    skip_all = True if not force_redo else False
-    for i in range(min(len(loader), num)):
-
-        if not skip_all:
-            break
-
-        if f"view-{i}.png" in existing_files or not skip_all:
-            pass
-        else:
-            skip_all = False
-            break
-
-    if skip_all:
-        return
-
-    view_data = []
-    total_edges, total_dropped = 0, 0
-
-    view_learner.eval()
-    with torch.no_grad():
-        for batch in loader:
-            batch = batch.to(device)
-            edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
-
-            temperature = 1.0
-            bias = 0.0 + 0.0001  # If bias is 0, we run into problems
-            eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
-            gate_inputs = torch.log(eps) - torch.log(1 - eps)
-            gate_inputs = gate_inputs.to(device)
-            gate_inputs = (gate_inputs + edge_logits) / temperature
-            batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze()
-
-            kept = torch.bernoulli(batch_aug_edge_weight).to(torch.bool)
-
-            total_edges += kept.shape[0]
-            total_dropped += kept.shape[0] - torch.sum(kept)
-            # Kept is a boolean array of whether an edge is kept after the view
-            datalist = batch.to_data_list()
-            edges_so_far = 0
-            for idata, data in enumerate(datalist):
-
-                dropped_slice = kept[edges_so_far:edges_so_far + data.num_edges]
-                new_edges = data.edge_index[:,dropped_slice]
-                edges_so_far += data.num_edges
-                data.edge_index = new_edges
-                datalist[idata] = data
-
-            view_data += datalist
-
-
-    percent_dropped = str(100*int(total_dropped)/int(total_edges))[:5]
-    print(f"Dropped {percent_dropped}% of edges")
-    vis_grid(view_data[:16], os.getcwd() + '/original_datasets/' + dataset_name + f'/view-grid-{dataset_name}.png')
-
-    existing_files = os.listdir(os.getcwd() + '/original_datasets/' + dataset_name + f'/views')
-    for i, data in enumerate(tqdm(view_data)):
-        filename = os.getcwd() + '/original_datasets/' + dataset_name + f'/views/view-{i}.png'
-
-
-        if force_redo and i <= num:
-            vis_from_pyg(data, filename=filename)
-
-        elif i >= num or f"view-{i}.png" in existing_files:
-            # print(f"{filename} already exists")
-            pass
-
-        else:
-            vis_from_pyg(data, filename=filename)
 
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """
@@ -604,8 +404,6 @@ def run(args):
     # setup_seed(args.seed)
 
     num = args.num
-    redo_views = args.redo_views
-    print(f"\n===================\nRedo-views: {redo_views}\n===================\n")
     checkpoint = args.checkpoint
 
     if checkpoint == "latest":
@@ -654,131 +452,15 @@ def run(args):
     my_transforms = Compose([initialize_edge_weight])
     dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
     split_idx = dataset.get_idx_split()
-    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms, num=num)
-
-    # Visualise
-    for i, loader in enumerate(val_loaders):
-        vis_vals(loader, names[i], num = num)
-        vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
+    val_loaders, names = get_test_loaders(dataset[split_idx["test"]], args.batch_size, my_transforms, num=num)
+    train_loaders, names = get_val_loaders(dataset[split_idx["valid"]], args.batch_size, my_transforms, num=2*num)
 
     # Get embeddings
     general_ee = GeneralEmbeddingEvaluation()
     model.eval()
-    all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
-    embeddings_vs_metrics(val_loaders, all_embeddings, n_components=10)
+    # all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-
-    # embedder = ComponentSlicer(comp_1=10, comp_2=20)
-    # embedder = Isomap(n_components=2, n_neighbors=250, n_jobs=6).fit(all_embeddings)
-    embedder = TruncatedSVD(n_components=10).fit(all_embeddings)
-    # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=6)
-    # embedder.fit(all_embeddings)
-
-    #Prepare data for bokeh dashboard
-    x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
-    ind_x, ind_y, ind_plot_names, ind_plot_paths, ind_view_paths = [], [], [], [], []
-
-    for i, emb in enumerate(separate_embeddings):
-        proj = embedder.transform(emb)
-
-        proj_x, proj_y = proj[:num,0].tolist(), proj[:num,1].tolist()
-        x += proj_x
-        y += proj_y
-
-        ind_x.append(proj_x)
-        ind_y.append(proj_y)
-
-        plot_names += len(proj_x)*[names[i]]
-
-        ind_plot_names.append(names[i])
-
-        img_root = os.getcwd() + '/original_datasets/' + names[i] + '/vals/*.png'
-        img_paths = glob.glob(img_root)
-
-        filenames = [int(filename.split('/')[-1][4:-4]) for filename in img_paths]
-        sort_inds = np.argsort(filenames).tolist()
-        plot_paths += [img_paths[ind] for ind in sort_inds][:num]
-
-        ind_plot_paths.append([img_paths[ind] for ind in sort_inds][:num])
-
-
-        img_root = os.getcwd() + '/original_datasets/' + names[i] + '/views/*.png'
-        img_paths = glob.glob(img_root)
-
-        filenames = [int(filename.split('/')[-1][5:-4]) for filename in img_paths]
-        sort_inds = np.argsort(filenames).tolist()
-        view_paths += [img_paths[ind] for ind in sort_inds]
-
-        ind_view_paths.append([img_paths[ind] for ind in sort_inds])
-
-    hover = HoverTool(
-        tooltips="""
-            <div>
-                <div>
-                    <span style="font-size: 15px; font-weight: bold;">@desc</span>
-                    <span style="font-size: 10px;">Original and View</span>
-                </div>
-                <div>
-                    <img
-                        src="@imgs" height="128" alt="missing" width="128"
-                        style="float: left; margin: 0px 0px 0px 0px;"
-                        border="2"
-                    ></img>
-                    <img
-                        src="@views" height="128" alt="missing" width="128"
-                        style="float: left; margin: 0px 0px 0px 0px;"
-                        border="2"
-                    ></img>
-                </div>
-
-            </div>
-            """
-    )
-
-    p = figure(tools=[hover, PanTool(), BoxZoomTool(), WheelZoomTool(), UndoTool(), ResetTool()],
-                aspect_ratio = 16/8, lod_factor = 10)
-
-    unique_names = np.arange(len(names))
-
-    colors = [
-        "#%02x%02x%02x" % (int(r), int(g), int(b)) for r, g, b, _ in 255 * mpl.cm.tab20(mpl.colors.Normalize()(unique_names))
-    ]
-
-    for i in range(len(names)):
-        print(names[i], len(ind_x[i]), len(ind_plot_paths[i]), len(ind_view_paths[i]))
-        name = names[i]
-        source = ColumnDataSource(
-            data=dict(
-                x=ind_x[i],
-                y=ind_y[i],
-                desc= len(ind_x[i]) * [name],
-                imgs=ind_plot_paths[i],
-                views=ind_view_paths[i]
-            )
-        )
-
-        p.scatter("x", "y", color = colors[i], size=5, alpha=1, legend_label=name, source=source)
-    p.legend.click_policy = "hide"
-    p.legend.location = "top_left"
-    p.sizing_mode = 'scale_width'
-
-
-    x_array, y_array = np.array(sorted(x)), np.array(sorted(y))
-    n_points = x_array.shape[0]
-    outlier_x = [x_array[int(0.01*n_points)],x_array[int(0.99*n_points)]]
-    outlier_y = [y_array[int(0.01*n_points)], y_array[int(0.99*n_points)]]
-
-    upper_lim_x, lower_lim_x = max(outlier_x), min(outlier_x)
-    upper_lim_y, lower_lim_y = max(outlier_y), min(outlier_y)
-
-    p.x_range = Range1d(lower_lim_x, upper_lim_x)
-    p.y_range = Range1d(lower_lim_y, upper_lim_y)
-
-    p.xaxis.axis_label = f"{embedder} 0" # {embedder.explained_variance_ratio_[0]}"
-    p.yaxis.axis_label = f"{embedder} 1" # {embedder.explained_variance_ratio_[1]}"
-
-    output_file("bokeh-embedding-dashboard.html")
-    show(p)
+    general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names, use_wandb=False)
 
 
 

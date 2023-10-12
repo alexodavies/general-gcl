@@ -67,7 +67,7 @@ class FromOGBDataset(InMemoryDataset):
 
     def process(self):
         # Read data into huge `Data` list.
-        print(f"Looking for OGB processed files at {self.processed_paths[self.stage_to_index[self.stage]]}")
+        # print(f"Looking for OGB processed files at {self.processed_paths[self.stage_to_index[self.stage]]}")
         if os.path.isfile(self.processed_paths[self.stage_to_index[self.stage]]):
             print(f"OGB files exist at {self.processed_paths[self.stage_to_index[self.stage]]}")
             return
@@ -103,7 +103,7 @@ class FromOGBDataset(InMemoryDataset):
                 n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
 
 
-                data = Data(x = torch.ones(n_nodes).to(torch.int).reshape((-1, 1)),
+                data = Data(x = item.x[:,0].reshape((-1, 1)),# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)), #
                             edge_index=item.edge_index,
                             edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
                             y = item.y)
