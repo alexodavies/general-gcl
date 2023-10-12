@@ -411,13 +411,13 @@ def run(args):
             model.eval()
             total_val = 0.
             total_train = 0.
-            general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-            for ee in evaluators:
-                train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                             test_loader, vis=True)
-                general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
-                total_val += val_score
-                total_train += train_score
+            # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
+            # for ee in evaluators:
+            train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
+                                                                         test_loader, vis=True)
+            general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
+            total_val += val_score
+            total_train += train_score
 
 
             wandb.log({"Train Score": total_train,
