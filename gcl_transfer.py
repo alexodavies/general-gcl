@@ -192,7 +192,7 @@ def get_test_loaders(dataset, batch_size, transforms, num = 1000):
     split_idx = [data.get_idx_split() for data in datasets]
 
     # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
+    datasets = [data[split_idx[i]["test"]] for i, data in enumerate(datasets)]
     dataset_lengths = [len(data) for data in datasets]
 
     for i, data in enumerate(datasets):
