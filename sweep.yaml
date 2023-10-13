@@ -16,7 +16,7 @@ parameters:
     max: 10
     min: 1
   reg_lambda:
-    distribution: uniform
-    max: 2
-    min: 0.001
+    distribution: log_uniform
+    max: 1.
+    min: -4.
 program: gcl_transfer.py
