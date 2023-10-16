@@ -522,8 +522,8 @@ class GeneralEmbeddingEvaluation():
 
 	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names, use_wandb=True, node_features = False):
 
-		train_all_embeddings, train_separate_embeddings = self.get_embeddings(encoder, train_loaders)
-		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders)
+		train_all_embeddings, train_separate_embeddings = self.get_embeddings(encoder, train_loaders, node_features=node_features)
+		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders, node_features=node_features)
 
 		if use_wandb:
 			self.centroid_similarities(val_separate_embeddings, names)
@@ -549,13 +549,13 @@ class GeneralEmbeddingEvaluation():
 		if use_wandb:
 			wandb.log({"Total Val Score":total_score})
 
-	def get_embeddings(self, encoder, loaders, use_wandb=True):
+	def get_embeddings(self, encoder, loaders, use_wandb=True, node_features = False):
 		encoder.eval()
 		all_embeddings = None
 		separate_embeddings = []
 		# colours = []
 		for i, loader in enumerate(tqdm(loaders, leave = False, desc = "Getting embeddings")):
-			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False, every=1)
+			train_emb, train_y = get_emb_y(loader, encoder, self.device, is_rand_label=False, every=1, node_features = node_features)
 			separate_embeddings.append(train_emb)
 			if all_embeddings is None:
 				all_embeddings = train_emb
