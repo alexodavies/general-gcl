@@ -76,8 +76,8 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
     return texts
 
-def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every = 1):
-	x, y = encoder.get_embeddings(loader, device, is_rand_label, every = every, node_features = False)
+def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every = 1, node_features = False):
+	x, y = encoder.get_embeddings(loader, device, is_rand_label, every = every, node_features = node_features)
 	if dtype == 'numpy':
 		return x,y
 	elif dtype == 'torch':
