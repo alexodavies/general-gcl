@@ -49,8 +49,8 @@ class MoleculeEncoder(torch.nn.Module):
 					m.bias.data.fill_(0.0)
 
 	def forward(self, batch, x, edge_index, edge_attr, edge_weight=None):
-		x = self.atom_encoder(x.to(torch.int))
-		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
+		# x = self.atom_encoder(x.to(torch.int))
+		# edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN
 		xs = []
 		for i in range(self.num_gc_layers):
