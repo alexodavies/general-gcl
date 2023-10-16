@@ -368,11 +368,11 @@ def run(args):
     model.eval()
     # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
     # for ee in evaluators:
-    train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
+    # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
-    logging.info(
-        "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
-                                                                                         test_score))
+    # logging.info(
+    #     "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
+    #                                                                                      test_score))
 
     model_losses = []
     view_losses = []
@@ -415,50 +415,49 @@ def run(args):
             total_train = 0.
             # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
             # for ee in evaluators:
-            train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                         test_loader, vis=True)
+            # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
+            #                                                              test_loader, vis=True)
             general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
-            total_val += val_score
-            total_train += train_score
+            # total_val += val_score
+            # total_train += train_score
 
 
-            wandb.log({"Train Score": total_train,
-                       "Val Score": total_val})
+            # wandb.log({"Train Score": total_train,
+            #            "Val Score": total_val})
 
-            train_curve.append(train_score)
-            valid_curve.append(val_score)
-            test_curve.append(test_score)
+            # train_curve.append(train_score)
+            # valid_curve.append(val_score)
+            # test_curve.append(test_score)
 
-            if total_val <= best_val:
-                best_val = val_score
+            # if total_val <= best_val:
+            #     best_val = val_score
             torch.save({
                 'epoch': epoch,
                 'encoder_state_dict': model.state_dict(),
                 'encoder_optimizer_state_dict': model_optimizer.state_dict(),
                 'view_state_dict': view_learner.state_dict(),
-                'view_optimizer_state_dict': view_optimizer.state_dict(),
-                'loss': val_score,
-            }, f"{wandb.run.dir}/Checkpoint-{epoch}-{np.random.randint(0,10)}.pt")
+                'view_optimizer_state_dict': view_optimizer.state_dict()},
+                f"{wandb.run.dir}/Checkpoint-{epoch}-{np.random.randint(0,10)}.pt")
 
-    train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-                                                                 test_loader, vis = True)
+    # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
+    #                                                              test_loader, vis = True)
 
     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
 
-    if 'classification' in dataset.task_type:
-        best_val_epoch = np.argmax(np.array(valid_curve))
-        best_train = max(train_curve)
-    else:
-        best_val_epoch = np.argmin(np.array(valid_curve))
-        best_train = min(train_curve)
+    # if 'classification' in dataset.task_type:
+    #     best_val_epoch = np.argmax(np.array(valid_curve))
+    #     best_train = max(train_curve)
+    # else:
+    #     best_val_epoch = np.argmin(np.array(valid_curve))
+    #     best_train = min(train_curve)
+    #
+    # logging.info('FinishedTraining!')
+    # logging.info('BestEpoch: {}'.format(best_val_epoch))
+    # logging.info('BestTrainScore: {}'.format(best_train))
+    # logging.info('BestValidationScore: {}'.format(valid_curve[best_val_epoch]))
+    # logging.info('FinalTestScore: {}'.format(test_curve[best_val_epoch]))
 
-    logging.info('FinishedTraining!')
-    logging.info('BestEpoch: {}'.format(best_val_epoch))
-    logging.info('BestTrainScore: {}'.format(best_train))
-    logging.info('BestValidationScore: {}'.format(valid_curve[best_val_epoch]))
-    logging.info('FinalTestScore: {}'.format(test_curve[best_val_epoch]))
-
-    return valid_curve[best_val_epoch], test_curve[best_val_epoch]
+    # return valid_curve[best_val_epoch], test_curve[best_val_epoch]
 
 
 def arg_parse():
