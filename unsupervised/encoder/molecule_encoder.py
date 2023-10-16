@@ -78,7 +78,7 @@ class MoleculeEncoder(torch.nn.Module):
 		else:
 			raise NotImplementedError
 
-	def get_embeddings(self, loader, device, is_rand_label=False, every = 1):
+	def get_embeddings(self, loader, device, is_rand_label=False, every = 1,  node_features = False):
 		ret = []
 		y = []
 		with torch.no_grad():
@@ -93,6 +93,9 @@ class MoleculeEncoder(torch.nn.Module):
 
 				data = data.to(device)
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
+
+				if not node_features:
+					x = torch.ones_like(x)
 
 				# print(edge_index.max(), x.shape)
 

@@ -77,7 +77,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every = 1):
-	x, y = encoder.get_embeddings(loader, device, is_rand_label, every = every)
+	x, y = encoder.get_embeddings(loader, device, is_rand_label, every = every, node_features = False)
 	if dtype == 'numpy':
 		return x,y
 	elif dtype == 'torch':
@@ -520,9 +520,11 @@ class GeneralEmbeddingEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names, use_wandb=True):
+	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names, use_wandb=True, node_features = False):
+
 		train_all_embeddings, train_separate_embeddings = self.get_embeddings(encoder, train_loaders)
 		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders)
+
 		if use_wandb:
 			self.centroid_similarities(val_separate_embeddings, names)
 			self.vis(val_all_embeddings, val_separate_embeddings, names)

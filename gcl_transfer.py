@@ -324,6 +324,8 @@ def run(args):
     logging.info(args)
     # setup_seed(args.seed)
 
+    evaluation_node_features = args.node_features
+
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
     dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
@@ -367,7 +369,7 @@ def run(args):
     # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
     # for ee in evaluators:
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
-    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
+    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
     logging.info(
         "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
                                                                                          test_score))
@@ -415,7 +417,7 @@ def run(args):
             # for ee in evaluators:
             train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                          test_loader, vis=True)
-            general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
+            general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
             total_val += val_score
             total_train += train_score
 
@@ -441,7 +443,7 @@ def run(args):
     train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
                                                                  test_loader, vis = True)
 
-    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names)
+    general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))
@@ -468,7 +470,7 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=5,
+    parser.add_argument('--num_gc_layers', type=int, default=4,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
@@ -478,11 +480,20 @@ def arg_parse():
                         help='embedding dimension')
     parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
-    parser.add_argument('--drop_ratio', type=float, default=0.2,
+    parser.add_argument('--drop_ratio', type=float, default=0.,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=32,
+    parser.add_argument('--epochs', type=int, default=128,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
+
+    # parser.add_argument('--node-features', help="Whether to include node features in evaluation", action=argparse.BooleanOptionalAction)
+
+    parser.add_argument(
+        '-f',
+        '--node-features',
+        action='store_true',
+        help='Whether to include node features (labels) in evaluation',
+    )
 
     parser.add_argument('--seed', type=int, default=0)
 
