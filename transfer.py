@@ -37,13 +37,16 @@ from datasets.road_dataset import RoadDataset
 from datasets.tree_dataset import TreeDataset
 from datasets.lattice_dataset import LatticeDataset
 
+from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
 
-
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
+from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
 from unsupervised.encoder import MoleculeEncoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
+from unsupervised.encoder import TransferModel
+
+from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 
 
 def warn(*args, **kwargs):
@@ -102,172 +105,7 @@ def better_to_nx(data):
 
     return g, labels
 
-class ComponentSlicer:
-    def __init__(self, comp_1 = 0, comp_2 = 1):
-        self.comp_1 = comp_1
-        self.comp_2 = comp_2
 
-    def fit(self, X):
-        pass
-
-    def transform(self, X):
-        return np.concatenate((X[:, self.comp_1].reshape(-1,1), X[:, self.comp_2].reshape(-1,1)), axis=1)
-
-
-def average_degree(g):
-    return nx.number_of_edges(g)/nx.number_of_nodes(g)
-#
-def safe_diameter(g):
-    """
-    Returns either the diameter of a graph or -1 if it has multiple components
-    Args:
-        g: networkx.Graph
-
-    Returns:
-        either the diameter of the graph or -1
-    """
-    try:
-        return nx.diameter(g)
-    except:
-        return -1
-
-def four_cycles(g):
-    """
-    Returns the number of 4-cycles in a graph, normalised by the number of nodes
-    """
-    cycles = nx.simple_cycles(g, 4)
-    return len(list(cycles)) / g.order()
-
-def five_cycle_worker(g):
-    """
-    Returns the number of 5-cycles in a graph, normalised by the number of nodes
-    """
-    cycles = nx.simple_cycles(g, 5)
-    return len(list(cycles)) / nx.number_of_nodes(g)
-
-def five_cycles(graphs):
-    """
-    Returns the number of 5-cycles per graph in a list of graphs
-    Args:
-        graphs: list of networkx.Graph objects
-
-    Returns:
-        list of 5-cycle counts
-    """
-    sample_ref = []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
-        for n_coms in tqdm(executor.map(five_cycle_worker, graphs), desc="Five cycles"):
-            sample_ref.append(n_coms)
-
-    return sample_ref
-
-def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
-    """
-    Compute the correlations between a set of metrics and the SVD decomposition of an embedding
-    The results are currently printed in-terminal
-
-    Args:
-        loaders: set of dataloaders, used to reconstruct networkx.Graph s
-        embeddings: tensor or numpy array of embeddings from an encoder
-        n_components: the number of components against which to compute correlations
-
-    Returns:
-        None (currently)
-    """
-
-    # Iterate over items in loaders and convert to nx graphs, while removing selfloops
-    val_data = []
-    for loader in loaders:
-        for batch in loader:
-            val_data += batch.to_data_list()
-
-    val_data = [better_to_nx(data)[0] for data in val_data]
-    for item in val_data:
-        item.remove_edges_from(nx.selfloop_edges(item))
-
-
-    # Project embedding using SVD
-    embedder = TruncatedSVD(n_components=n_components).fit(embeddings)
-    projection = embedder.transform(embeddings)
-
-    # Metrics can be added here - should take an nx graph as input and return a numerical value
-    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity, four_cycles]
-
-    # Compute metrics for all graphs
-    metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
-
-    # 5-cycles is multi-processed, so needs to be handled differently
-    metric_arrays += [np.array(five_cycles(val_data))]
-    metrics += ["five-cycles"]
-
-    # A little spaghetti but not too expensive compared to computing cycles
-    # Iterate over the components of the embedding, then iterate over the metric values
-    # to find correlations. The future version will probably produce a .csv
-    for component in range(n_components):
-        projected = projection[:, component].flatten()
-
-        correlations = [np.corrcoef(projected[metric != -1], metric[metric != -1])[0,1] for metric in metric_arrays]
-        max_ind = np.argsort(np.abs(correlations))[-1]
-
-        exp_variance = str(100*embedder.explained_variance_ratio_[component])[:5]
-        exp_corr = str(correlations[max_ind])[:5]
-        try:
-            metric_name = str(metrics[max_ind]).split(' ')[1]
-        except:
-            metric_name = str(metrics[max_ind])
-
-        print("-"*40)
-        print(f"PCA component {component}, explained variance {exp_variance}%, correlated best with {metric_name} (R2: {exp_corr})")
-        print("Extra detail:")
-        for i_metric, corr in enumerate(correlations):
-            metric = metrics[i_metric]
-            try:
-                metric_name = str(metric).split(' ')[1]
-            except:
-                metric_name = str(metric)
-            print(f"{metric_name} corr. {corr}")
-
-def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
-    """
-    Unfinished function to track how clusters form in the embedding space
-    Code is pretty identical to the function above
-    Args:
-        loaders: a set of validation loaders, used to retrieve networkx graphs
-        embeddings: torch tensor or numpy array of encoder embeddings
-        cluster_samples: both min_cluster_size and min_samples for HDBSCAN
-
-    Returns:
-
-    """
-    val_data = []
-    for loader in loaders:
-        for batch in loader:
-            val_data += batch.to_data_list()
-
-    val_data = [better_to_nx(data)[0] for data in val_data]
-    for item in val_data:
-        item.remove_edges_from(nx.selfloop_edges(item))
-
-    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity]
-
-    metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
-
-    clusterer = HDBSCAN(min_cluster_size=cluster_samples, min_samples=cluster_samples).fit(embeddings)
-
-    predicted = clusterer.labels_
-    unique_clusters, cluster_counts = np.unique(predicted, return_counts=True)
-
-    for i_cluster in range(unique_clusters.shape[0]):
-        print(f"---------------\nCluster {unique_clusters[i_cluster]}, size {cluster_counts[i_cluster]}")
-        indices = np.arange(predicted.shape[0])[predicted == unique_clusters[i_cluster]]
-
-        specific_metrics = [metric[indices] for metric in metric_arrays]
-
-        for i, metric in enumerate(specific_metrics):
-            print(f"{str(metrics[i])}, mean {np.mean(metric)}, std dev {np.std(metric)}")
 
 def get_test_loaders(dataset, batch_size, transforms, num = 5000):
     """
@@ -284,7 +122,7 @@ def get_test_loaders(dataset, batch_size, transforms, num = 5000):
         names: name of each loaders respective dataset
 
     """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
+    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
 
     social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "test", num=num)),
                        transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "test", num=num)),
@@ -292,7 +130,6 @@ def get_test_loaders(dataset, batch_size, transforms, num = 5000):
                        transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="test", num=num)),
                        transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "test", num=num)),
                        transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "test", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "test", num=num)),
                        transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="test", num=num)),
                        transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "test", num=num))
                        ]
@@ -317,7 +154,7 @@ def get_test_loaders(dataset, batch_size, transforms, num = 5000):
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
 
     return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
+                                   "trees",  "random", "community"]
 
 def get_val_loaders(dataset, batch_size, transforms, num = 5000):
     """
@@ -334,7 +171,7 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
         names: name of each loaders respective dataset
 
     """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
+    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
 
     social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
                        transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
@@ -342,7 +179,6 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
                        transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
                        transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num)),
                        transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "val", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "val", num=num)),
                        transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="val", num=num)),
                        transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num))
                        ]
@@ -367,7 +203,7 @@ def get_val_loaders(dataset, batch_size, transforms, num = 5000):
     datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
 
     return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
+                                   "trees",  "random", "community"]
 
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """
@@ -390,6 +226,174 @@ def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
 
     return original_cfg
 
+
+def tidy_labels(labels):
+    if type(labels[0]) is not list:
+        if np.sum(labels) == np.sum(np.array(labels).astype(int)):
+            labels = np.array(labels).astype(int)
+        else:
+            labels = np.array(labels)
+        return labels
+
+    # Could be lists of floats
+    elif type(labels[0][0]) is float:
+        return np.array(labels)
+
+    # Possibility of one-hot labels
+    elif np.sum(labels[0][0]) == 1 and type(labels[0][0]) is int:
+
+        new_labels = []
+        for label in labels:
+            new_labels.append(np.argmax(label))
+
+        return np.array(new_labels)
+
+    else:
+        return np.array(labels)
+
+def get_task_type(loader, name):
+    val_targets = []
+    for i_batch, batch in enumerate(loader):
+        if batch.y is None or name == "ogbg-molpcba" or name == "blank":
+            task = "empty"
+            n_samples = 0
+            return task
+
+        else:
+            selected_y = batch.y
+            if type(selected_y) is list:
+                selected_y = torch.Tensor(selected_y)
+
+            if selected_y.dim() > 1:
+                selected_y = [selected_y[i, :].cpu().numpy().tolist() for i in range(selected_y.shape[0])]
+            else:
+                selected_y = selected_y.cpu().numpy().tolist()
+
+            val_targets += selected_y
+
+        break
+
+    val_targets = tidy_labels(val_targets).flatten()
+    if type(val_targets[0]) is int or type(val_targets[0]) is np.int64:
+        task = "classification"
+    else:
+        task = "regression"
+
+    return task
+
+def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
+    model.eval()
+    with torch.no_grad():
+        ys, y_preds = [], []
+        for batch in test_loader:
+            y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
+            y = batch.y
+
+            if type(y) is list:
+                y = torch.tensor(y)
+
+            if task == "classification":
+                y_pred = out_fn(y_pred).flatten()
+                if y.dim() > 1:
+                    y = y[:, 0]
+                y = y.to(y_pred.dtype)
+
+            y_pred = y_pred.cpu().numpy().tolist()
+            y = y.cpu().numpy().tolist()
+
+            ys += y
+            y_preds += y_pred
+    model.train()
+    try:
+        return score_fn(ys, y_preds, squared=False), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
+    except:
+        return score_fn(ys, y_preds), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
+
+
+def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n_epochs = 50):
+    # At the moment this is rigid to single-value predictions
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    task = get_task_type(val_loader, name)
+
+    model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    if model_name not in os.listdir("outputs"):
+        os.mkdir(f"outputs/{model_name}")
+
+    if task == "empty":
+        return
+
+    if task == "classification":
+        loss_fn = BCELoss()
+        score_fn = roc_auc_score
+    else:
+        loss_fn = MSELoss()
+        score_fn = mean_squared_error
+
+
+    if checkpoint_path != "untrained":
+        model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+        model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
+
+    out_fn = Sigmoid()
+    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
+    print(f"\nName: {name}, State: {model_name}")
+    pbar = tqdm(range(n_epochs), leave=False)
+    train_losses, val_losses = [], []
+    for i_epoch in pbar:
+        model.train()
+        # ys, y_preds = [], []
+        for i_batch, batch in enumerate(val_loader):
+            # set up
+            batch = batch.to(device)
+            y = batch.y
+
+            if type(y) is list:
+                y = torch.tensor(y)
+
+            y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
+            if task == "classification":
+                y_pred = out_fn(y_pred).flatten()
+                if y.dim() > 1:
+                    y = y[:, 0]
+            y = y.to(y_pred.dtype)
+
+            model.zero_grad()
+
+            # model_loss = model.calc_loss(y, y_pred)
+            model_loss = loss_fn(y_pred, y)
+
+            train_losses.append(model_loss.item())
+
+
+            # ys += y.cpu().numpy().tolist()
+            # y_preds += y_pred.cpu().numpy().tolist()
+
+            # standard gradient descent formulation
+            model_loss.backward()
+            model_optimizer.step()
+        if i_epoch == 0:
+            print(f"Untrained Score: {evaluate_model(model, test_loader, score_fn, out_fn, loss_fn,  task)[0]}")
+        pbar.set_description(str(model_loss.item())[:6])
+        _, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
+        val_losses.append(val_loss.item())
+    final_score = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn,  task)[0]
+    print(f"Final Score: {final_score}")
+
+
+
+
+
+    fig, ax = plt.subplots(figsize=(6,4))
+    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
+    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
+    ax.legend(shadow=True)
+    plt.savefig(f"outputs/{model_name}/{name}.png")
+    plt.close()
+
+    return train_losses, val_losses, final_score
+
+
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -411,7 +415,7 @@ def run(args):
         checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
 
     elif checkpoint == "untrained":
-        pass
+        checkpoint_path = "untrained"
 
     else:
         checkpoint_path = f"outputs/{checkpoint}"
@@ -432,30 +436,74 @@ def run(args):
 
     # Retrieved saved models and load weights
 
-    model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                    proj_hidden_dim=args.emb_dim).to(device)
+    # model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+    #                 proj_hidden_dim=args.emb_dim).to(device)
 
-    view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                               mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-
-    if checkpoint != "untrained":
-        model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-        model.load_state_dict(model_dict['encoder_state_dict'])
-        view_learner.load_state_dict(model_dict['view_state_dict'])
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
     dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
     split_idx = dataset.get_idx_split()
-    val_loaders, names = get_test_loaders(dataset[split_idx["test"]], args.batch_size, my_transforms, num=num)
-    train_loaders, names = get_val_loaders(dataset[split_idx["valid"]], args.batch_size, my_transforms, num=2*num)
+    test_loaders, names = get_test_loaders(dataset[split_idx["test"]], args.batch_size, my_transforms, num=num)
+    val_loaders, names = get_val_loaders(dataset[split_idx["valid"]], args.batch_size, my_transforms, num=2*num)
+    model_name = checkpoint_path.split("/")[-1].split(".")[0]
+
+
+
+
+    for i in range(len(val_loaders)):
+        val_loader = val_loaders[i]
+        test_loader = test_loaders[i]
+        name = names[i]
+
+        if name not in os.listdir("outputs"):
+            os.mkdir(f"outputs/{name}")
+
+        model = TransferModel(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            proj_hidden_dim=args.emb_dim, output_dim=1).to(device)
+
+        # try:
+        num_epochs = 10
+        pretrain_train_losses, pretrain_val_losses, pretrain_val_score = fine_tune(model, checkpoint_path, val_loader, test_loader,
+                                                               name = name, n_epochs=num_epochs)
+
+        model = TransferModel(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            proj_hidden_dim=args.emb_dim, output_dim=1).to(device)
+
+        untrain_train_losses, untrain_val_losses, untrain_val_score = fine_tune(model, "untrained", val_loader, test_loader,
+                                                               name = name, n_epochs=num_epochs)
+
+        untrain_val_score = str(untrain_val_score)[:6]
+        pretrain_val_score = str(pretrain_val_score)[:6]
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), pretrain_val_losses, label=f"Pre-Trained (MuD), Final score: {pretrain_val_score}")
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), untrain_val_losses, label=f"From Scratch, Final score: {untrain_val_score}")
+        ax.legend(shadow=True)
+        ax.set_xlabel("Batch")
+        ax.set_ylabel("Validation Loss")
+
+        if max(pretrain_val_losses + untrain_val_losses) > 2000:
+            ax.set_yscale('log')
+
+        plt.savefig(f"outputs/{name}/{model_name}.png")
+        plt.close()
+
+        # except:
+        #     pass
 
     # Get embeddings
-    general_ee = GeneralEmbeddingEvaluation()
-    model.eval()
+    # general_ee = GeneralEmbeddingEvaluation()
+    # model.eval()
     # all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names, use_wandb=False)
+
+
+    # general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names, use_wandb=False)
 
 
 
@@ -475,7 +523,7 @@ def arg_parse():
                         help='GNN Pooling Type Standard/Layerwise')
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
-    parser.add_argument('--mlp_edge_model_dim', type=int, default=128,
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=32,
                         help='embedding dimension')
     parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
@@ -487,7 +535,7 @@ def arg_parse():
 
     parser.add_argument('--seed', type=int, default=0)
 
-    parser.add_argument('--num', type=int, default=5000,
+    parser.add_argument('--num', type=int, default=1000,
                         help='Number of points included in each dataset')
 
     parser.add_argument('--redo_views', type=bool, default=False,

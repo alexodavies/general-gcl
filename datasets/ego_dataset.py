@@ -106,6 +106,8 @@ class EgoDataset(InMemoryDataset):
         self.stage_to_index = {"train":0,
                                "val":1,
                                "test":2}
+
+
         _ = get_deezer(num = 1)
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
