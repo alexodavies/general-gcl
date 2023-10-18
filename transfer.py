@@ -160,11 +160,10 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
     out_fn = Sigmoid()
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
-    print(f"\nName: {name}, State: {model_name}")
-    pbar = tqdm(range(n_epochs), leave=False)
+    # pbar = tqdm(range(n_epochs), leave=False)
     best_val_loss, best_epoch = 1.e9, 0
     train_losses, val_losses = [], []
-    for i_epoch in pbar:
+    for i_epoch in range(n_epochs):
         model.train()
         # ys, y_preds = [], []
         for i_batch, batch in enumerate(val_loader):
@@ -188,9 +187,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
             model_loss.backward()
             model_optimizer.step()
-        if i_epoch == 0:
-            print(f"Untrained Score: {evaluate_model(model, test_loader, score_fn, out_fn, loss_fn,  task)[0]}")
-        pbar.set_description(str(model_loss.item())[:6])
+        # pbar.set_description(str(model_loss.item())[:6])
         _, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
 
         if val_loss < best_val_loss:
@@ -200,8 +197,8 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
         val_losses.append(val_loss.item())
 
-    final_score = 1 - final_score
-    print(f"Final Score: {final_score}")
+    if task == "classification":
+        final_score = 1 - final_score
 
     fig, ax = plt.subplots(figsize=(6,4))
     ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
@@ -265,6 +262,7 @@ def run(args):
         val_loader = val_loaders[i]
         test_loader = test_loaders[i]
         name = names[i]
+        print(f"Name: {name}")
 
         if name not in os.listdir("outputs"):
             os.mkdir(f"outputs/{name}")
@@ -280,7 +278,8 @@ def run(args):
         pretrain_val = np.zeros((n_repeats, num_epochs))
         untrain_val = np.zeros((n_repeats, num_epochs))
 
-        for n in tqdm(n_repeats):
+        pbar = tqdm(range(n_repeats))
+        for n in pbar:
             model = TransferModel(
                 MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                                 pooling_type=args.pooling_type),
@@ -291,7 +290,6 @@ def run(args):
                                                                                                                                     test_loader,
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
-
             model = TransferModel(
                 MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                                 pooling_type=args.pooling_type),
@@ -305,6 +303,9 @@ def run(args):
 
             pretrain_val[n, :] = pretrain_val_losses
             untrain_val[n, :] = untrain_val_losses
+
+            scores = "Pretrain:" + str(pretrain_val_score)[:5] + "  Untrain:" + str(untrain_val_score)[:5]
+            pbar.set_description(scores)
 
             if pretrain_val_score <= best_pretrain_score:
                 best_pretrain_score = pretrain_val_score
@@ -324,15 +325,15 @@ def run(args):
         fig, ax = plt.subplots(figsize=(6, 4))
 
 
-        ax.errorbar(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_losses,
-                yerr = pretrain_val_loss_dev,
+        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+                pretrain_val_losses + pretrain_val_loss_dev,
+                pretrain_val_losses - pretrain_val_loss_dev,
                 alpha = 0.5,
                 c = "green")
 
-        ax.errorbar(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_losses,
-                yerr = untrain_val_loss_dev,
+        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+                untrain_val_losses + untrain_val_loss_dev,
+                untrain_val_losses - untrain_val_loss_dev,
                 alpha = 0.5,
                 c = "blue")
 
