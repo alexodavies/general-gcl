@@ -269,7 +269,7 @@ def run(args):
 
 
 def arg_parse():
-    parser = argparse.ArgumentParser(description='AD-GCL ogbg-mol*')
+    parser = argparse.ArgumentParser(description='AD-GCL')
 
     parser.add_argument('--dataset', type=str, default='ogbg-molesol',
                         help='Dataset')
@@ -277,21 +277,21 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=4,
+    parser.add_argument('--num_gc_layers', type=int, default=6,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
-    parser.add_argument('--mlp_edge_model_dim', type=int, default=128,
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
                         help='embedding dimension')
     parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
-    parser.add_argument('--drop_ratio', type=float, default=0.,
+    parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=128,
+    parser.add_argument('--epochs', type=int, default=1024,
                         help='Train Epochs')
-    parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
+    parser.add_argument('--reg_lambda', type=float, default=6.0, help='View Learner Edge Perturb Regularization Strength')
 
     # parser.add_argument('--node-features', help="Whether to include node features in evaluation", action=argparse.BooleanOptionalAction)
 

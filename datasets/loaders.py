@@ -33,6 +33,7 @@ def get_chemical_datasets(transforms, num, stage="train"):
         datasets = [data[split_idx[i][stage]] for i, data in enumerate(datasets)]
 
     # Need to convert to pyg inmemorydataset
+    num = num if stage != "train" else 5*num
     datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num, stage=stage) for i, data in enumerate(datasets)]
 
     return datasets, names
@@ -76,7 +77,7 @@ def get_social_datasets(transforms, num, stage = "train"):
 
     return social_datasets, names
 
-def get_train_loader(batch_size, transforms, num_social = 20000):
+def get_train_loader(batch_size, transforms, num_social = 50000):
     """
     Prepare a torch concat dataset dataloader
     Args:
@@ -154,7 +155,7 @@ def get_test_datasets(transforms, num = 2000):
 
     return datasets, ogbg_names + social_names
 
-def get_val_loaders(batch_size, transforms, num = 2000):
+def get_val_loaders(batch_size, transforms, num = 5000):
     """
     Get a list of validation loaders
 

@@ -133,12 +133,10 @@ def setup_wandb(cfg):
     param: cfg: same config
     """
 
-    kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
+    kwargs = {'name': 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl', 'config': cfg,
               'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
-
-    wandb.log({"Type":"Sampling"})
 
     return cfg
 
