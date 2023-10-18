@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import torch
 import wandb
 from datetime import datetime
+from littleballoffur.exploration_sampling import *
+from tqdm import tqdm
 
 
 
@@ -139,6 +141,35 @@ def setup_wandb(cfg):
     wandb.save('*.txt')
 
     return cfg
+
+def ESWR(graph, n_graphs, size):
+
+    # possible_samplers = inspect.getmembers(samplers, inspect.isclass)
+    #
+    # possible_samplers = [item[1] for item in possible_samplers]
+    possible_samplers = [MetropolisHastingsRandomWalkSampler, DiffusionSampler, DepthFirstSearchSampler]
+    sampler_list = []
+    for sampler in possible_samplers:
+        for i in range(24,96):
+            sampler.append(sampler(i))
+    # # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+    #
+    #
+    # print(f"Sampling {n_graphs} graphs from {graph}")
+    # graphs = []
+    # for i in tqdm(range(n_graphs), leave = False):
+    #     selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+    #     sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
+    #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+    # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
+    # sampler = MetropolisHastingsRandomWalkSampler(48)
+    graphs = []
+    for i in tqdm(range(n_graphs)):
+        sampler = sampler_list[np.random.randint(len(sampler_list))]
+        graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+    # graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
+
+    return graphs
 
 if __name__ == "__main__":
     g = nx.erdos_renyi_graph(100, 0.1)

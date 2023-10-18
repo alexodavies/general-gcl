@@ -12,6 +12,7 @@ from littleballoffur.exploration_sampling import MetropolisHastingsRandomWalkSam
 import wget
 # from utils import vis_from_pyg
 import matplotlib.pyplot as plt
+from utils import ESWR
 import numpy as np
 
 import inspect
@@ -92,26 +93,26 @@ def download_cora(visualise = False):
     os.chdir(start_dir)
     return graph
 
-def ESWR(graph, n_graphs, size):
-
-    # possible_samplers = inspect.getmembers(samplers, inspect.isclass)
-    #
-    # possible_samplers = [item[1] for item in possible_samplers]
-    # possible_samplers = [MetropolisHastingsRandomWalkSampler, DiffusionSampler, DepthFirstSearchSampler]
-    # # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
-    #
-    #
-    # print(f"Sampling {n_graphs} graphs from {graph}")
-    # graphs = []
-    # for i in tqdm(range(n_graphs), leave = False):
-    #     selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
-    #     sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
-    #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
-    # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
-    sampler = MetropolisHastingsRandomWalkSampler(48)
-    graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
-
-    return graphs
+# def ESWR(graph, n_graphs, size):
+#
+#     # possible_samplers = inspect.getmembers(samplers, inspect.isclass)
+#     #
+#     # possible_samplers = [item[1] for item in possible_samplers]
+#     # possible_samplers = [MetropolisHastingsRandomWalkSampler, DiffusionSampler, DepthFirstSearchSampler]
+#     # # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+#     #
+#     #
+#     # print(f"Sampling {n_graphs} graphs from {graph}")
+#     # graphs = []
+#     # for i in tqdm(range(n_graphs), leave = False):
+#     #     selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
+#     #     sampler = selected_sampler(number_of_nodes=np.random.randint(12, 48))
+#     #     graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+#     # sampler = selected_sampler(number_of_nodes=np.random.randint(12, 36))
+#     sampler = MetropolisHastingsRandomWalkSampler(48)
+#     graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
+#
+#     return graphs
 
 def get_cora_dataset(num = 2000, targets = False):
     fb_graph = download_cora()
