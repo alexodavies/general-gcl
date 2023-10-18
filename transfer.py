@@ -200,6 +200,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
         val_losses.append(val_loss.item())
 
+    final_score = 1 - final_score
     print(f"Final Score: {final_score}")
 
     fig, ax = plt.subplots(figsize=(6,4))
@@ -268,41 +269,63 @@ def run(args):
         if name not in os.listdir("outputs"):
             os.mkdir(f"outputs/{name}")
 
-        model = TransferModel(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
-            proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
+
 
         # try:
+        n_repeats = 10
         num_epochs = 50
-        pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
-                                                                                                                                checkpoint_path,
-                                                                                                                                val_loader,
-                                                                                                                                test_loader,
-                                                                                                                                name = name,
-                                                                                                                                n_epochs=num_epochs)
+        best_pretrain_score = 1.e07
+        best_untrain_score = 1.e07
 
-        model = TransferModel(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
-            proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
+        pretrain_val = np.zeros((n_repeats, num_epochs))
+        untrain_val = np.zeros((n_repeats, num_epochs))
 
-        untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
-                                                                                                                          "untrained",
-                                                                                                                          val_loader,
-                                                                                                                          test_loader,
-                                                                                                                          name = name,
-                                                                                                                          n_epochs=num_epochs)
+        for n in tqdm(n_repeats):
+            model = TransferModel(
+                MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                                pooling_type=args.pooling_type),
+                proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
+            pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
+                                                                                                                                    checkpoint_path,
+                                                                                                                                    val_loader,
+                                                                                                                                    test_loader,
+                                                                                                                                    name = name,
+                                                                                                                                    n_epochs=num_epochs)
 
-        untrain_val_score = str(untrain_val_score)[:6]
-        pretrain_val_score = str(pretrain_val_score)[:6]
+            model = TransferModel(
+                MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                                pooling_type=args.pooling_type),
+                proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
+            untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
+                                                                                                                              "untrained",
+                                                                                                                              val_loader,
+                                                                                                                              test_loader,
+                                                                                                                              name = name,
+                                                                                                                              n_epochs=num_epochs)
+
+            pretrain_val[n, :] = pretrain_val_losses
+            untrain_val[n, :] = untrain_val_losses
+
+            if pretrain_val_score <= best_pretrain_score:
+                best_pretrain_score = pretrain_val_score
+            if untrain_val_score <= best_untrain_score:
+                best_untrain_score = untrain_val_score
+
+
+
+        untrain_val_score = str(best_untrain_score)[:6]
+        pretrain_val_score = str(best_pretrain_score)[:6]
+
+        pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), pretrain_val_losses,
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)),
+                pretrain_val_losses,
                 label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}, Best epoch: {pretrain_best_epoch}",
                 c = "green")
 
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), untrain_val_losses,
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)),
+                untrain_val_losses,
                 label=f"From Scratch, Best score: {untrain_val_score}, Best epoch: {untrain_best_epoch}",
                 c = "blue")
 
@@ -310,7 +333,7 @@ def run(args):
         ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
 
         ax.legend(shadow=True)
-        ax.set_xlabel("Batch")
+        ax.set_xlabel("Epoch")
         ax.set_ylabel("Validation Loss")
 
         # if max(pretrain_val_losses + untrain_val_losses) > 2000:

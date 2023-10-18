@@ -166,7 +166,9 @@ def ESWR(graph, n_graphs, size):
     graphs = []
     for i in tqdm(range(n_graphs)):
         sampler = sampler_list[np.random.randint(len(sampler_list))]
-        graphs.append(nx.convert_node_labels_to_integers(sampler.sample(graph)))
+        g = nx.convert_node_labels_to_integers(sampler.sample(graph))
+        print(g)
+        graphs.append(g)
     # graphs = [nx.convert_node_labels_to_integers(sampler.sample(graph)) for i in tqdm(range(n_graphs))]
 
     return graphs
