@@ -19,7 +19,7 @@ from torch_scatter import scatter
 import matplotlib.pyplot as plt
 
 from datasets.facebook_dataset import get_fb_dataset, FacebookDataset
-from datasets.ego_dataset import get_deezer, EgoDataset
+from datasets.ego_dataset import get_twitch, EgoDataset
 from datasets.community_dataset import get_community_dataset, CommunityDataset
 from datasets.cora_dataset import get_cora_dataset, CoraDataset
 from datasets.random_dataset import get_random_dataset, RandomDataset

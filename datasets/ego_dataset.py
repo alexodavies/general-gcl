@@ -38,7 +38,7 @@ def vis_from_pyg(data, filename = None):
         plt.savefig(filename)
         plt.close()
 
-def get_deezer(num = 49152, include_targets = False):
+def get_twitch(num = 49152, include_targets = False):
     # zip_url = "https://snap.stanford.edu/data/deezer_ego_nets.zip"
     print("Processing twitch egos dataset")
     zip_url = "https://snap.stanford.edu/data/twitch_egos.zip"
@@ -108,7 +108,7 @@ class EgoDataset(InMemoryDataset):
                                "test":2}
 
 
-        _ = get_deezer(num = 1)
+        _ = get_twitch(num = 1)
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[self.stage_to_index[self.stage]])
 
@@ -131,7 +131,7 @@ class EgoDataset(InMemoryDataset):
             print("Ego files exist")
             return
         print(f"Aiming for {self.num} graphs")
-        data_list = get_deezer(num=self.num, include_targets = self.stage != "train")
+        data_list = get_twitch(num=self.num, include_targets =self.stage != "train")
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
