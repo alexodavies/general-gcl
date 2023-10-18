@@ -3,11 +3,12 @@ from torch.nn import Sequential, Linear, ReLU
 
 
 class TransferModel(torch.nn.Module):
-	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300):
+	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300, features = False):
 		super(TransferModel, self).__init__()
 
 		self.encoder = encoder
 		self.input_proj_dim = self.encoder.out_graph_dim
+		self.features = features
 
 		self.output_layer = Sequential(Linear(self.input_proj_dim, proj_hidden_dim), ReLU(inplace=True),
 									   Linear(proj_hidden_dim, output_dim))
@@ -22,6 +23,8 @@ class TransferModel(torch.nn.Module):
 					m.bias.data.fill_(0.0)
 
 	def forward(self, batch, x, edge_index, edge_attr, edge_weight=None):
+		if not self.features:
+			x = torch.ones_like(x)
 
 		z, node_emb = self.encoder(batch, x, edge_index, edge_attr, edge_weight)
 

@@ -24,6 +24,7 @@ from sklearn.manifold import SpectralEmbedding, Isomap
 from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
+from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 
 import wandb
 from datasets.community_dataset import CommunityDataset
@@ -269,105 +270,6 @@ def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
         for i, metric in enumerate(specific_metrics):
             print(f"{str(metrics[i])}, mean {np.mean(metric)}, std dev {np.std(metric)}")
 
-def get_test_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "test", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "test", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "test", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="test", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "test", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "test", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "test", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="test", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "test", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "test", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "test")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
-
-def get_val_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molpcba"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "val", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "val", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "val", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="val", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["test"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
 
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """
@@ -445,10 +347,9 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
-    split_idx = dataset.get_idx_split()
-    val_loaders, names = get_test_loaders(dataset[split_idx["test"]], args.batch_size, my_transforms, num=num)
-    train_loaders, names = get_val_loaders(dataset[split_idx["valid"]], args.batch_size, my_transforms, num=2*num)
+
+    val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    train_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
 
     # Get embeddings
     general_ee = GeneralEmbeddingEvaluation()

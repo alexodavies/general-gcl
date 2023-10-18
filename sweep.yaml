@@ -3,10 +3,6 @@ metric:
   goal: minimize
   name: Total Val Score
 parameters:
-  emb_dim:
-    distribution: int_uniform
-    max: 600
-    min: 150
   mlp_edge_model_dim:
     distribution: int_uniform
     max: 512
@@ -17,6 +13,6 @@ parameters:
     min: 1
   reg_lambda:
     distribution: log_uniform
-    max: 1.
-    min: -4.
-program: gcl_transfer.py
+    max: 2.
+    min: -2.
+program: gcl_training.py

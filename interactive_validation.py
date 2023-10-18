@@ -26,6 +26,9 @@ from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
 import wandb
+from utils import better_to_nx, vis_from_pyg, vis_grid
+from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+
 from datasets.community_dataset import CommunityDataset
 from datasets.cora_dataset import CoraDataset
 from datasets.ego_dataset import EgoDataset
@@ -269,170 +272,9 @@ def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
         for i, metric in enumerate(specific_metrics):
             print(f"{str(metrics[i])}, mean {np.mean(metric)}, std dev {np.std(metric)}")
 
-def vis_from_pyg(data, filename = None, ax = None):
-    """
-    Visualise a pytorch_geometric.data.Data object
-    Args:
-        data: pytorch_geometric.data.Data object
-        filename: if passed, this is the filename for the saved image. Ignored if ax is not None
-        ax: matplotlib axis object, which is returned if passed
-
-    Returns:
-
-    """
-    g, labels = better_to_nx(data)
-    if ax is None:
-        fig, ax = plt.subplots(figsize = (6,6))
-        ax_was_none = True
-    else:
-        ax_was_none = False
-
-    pos = nx.kamada_kawai_layout(g)
-
-    nx.draw_networkx_edges(g, pos = pos, ax = ax)
-    if np.unique(labels).shape[0] != 1:
-        nx.draw_networkx_nodes(g, pos=pos, node_color=labels, cmap="tab20", node_size=64,
-                               vmin=0, vmax=20, ax=ax)
-
-    ax.axis('off')
-    ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
-
-    plt.tight_layout()
-
-    if not ax_was_none:
-        return ax
-    elif filename is None:
-        plt.show()
-    else:
-        plt.savefig(filename)
-        plt.close()
-
-    plt.close()
-
-def vis_grid(datalist, filename):
-    """
-    Visualise a set of graphs, from pytorch_geometric.data.Data objects
-    Args:
-        datalist: list of pyg.data.Data objects
-        filename: the visualised grid is saved to this path
-
-    Returns:
-        None
-    """
-
-    # Trim to square root to ensure square grid
-    grid_dim = int(np.sqrt(len(datalist)))
-
-    fig, axes = plt.subplots(grid_dim, grid_dim, figsize=(8,8))
-
-    # Unpack axes
-    axes = [num for sublist in axes for num in sublist]
-
-    for i_axis, ax in enumerate(axes):
-        ax = vis_from_pyg(datalist[i_axis], ax = ax)
-
-    plt.savefig(filename)
 
 
-def get_val_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
 
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "val", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "val", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "val", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="val", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
-
-def get_train_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molpcba"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "train", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "train", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "train", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="train", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "train", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "train", num=num)),
-                       transforms(LatticeDataset(os.getcwd() +'/original_datasets/' +'lattice', stage = "train", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="train", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "train", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees", "lattice", "random", "community"]
 
 def vis_vals(loader, dataset_name, num = 10000):
     """
@@ -652,9 +494,8 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
-    split_idx = dataset.get_idx_split()
-    val_loaders, names = get_val_loaders(dataset[split_idx["train"]], args.batch_size, my_transforms, num=num)
+
+    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=num)
 
     # Visualise
     for i, loader in enumerate(val_loaders):

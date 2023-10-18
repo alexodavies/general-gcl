@@ -25,6 +25,9 @@ from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
+from utils import better_to_nx
+from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+
 import wandb
 from datasets.community_dataset import CommunityDataset
 from datasets.cora_dataset import CoraDataset
@@ -81,129 +84,8 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def better_to_nx(data):
-    """
-    Converts a pytorch_geometric.data.Data object to a networkx graph,
-    robust to nodes with no edges, unlike the original pytorch_geometric version
-
-    Args:
-        data: pytorch_geometric.data.Data object
-
-    Returns:
-        g: a networkx.Graph graph
-        labels: torch.Tensor of node labels
-    """
-    edges = data.edge_index.T.cpu().numpy()
-    labels = data.x[:,0].cpu().numpy()
-
-    g = nx.Graph()
-    g.add_edges_from(edges)
-
-    for ilabel in range(labels.shape[0]):
-        if ilabel not in np.unique(edges):
-            g.add_node(ilabel)
-
-    return g, labels
 
 
-
-def get_test_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "test", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "test", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "test", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="test", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "test", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "test", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="test", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "test", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "test", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "test")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees",  "random", "community"]
-
-def get_val_loaders(dataset, batch_size, transforms, num = 5000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders respective dataset
-
-    """
-    ogbg_names = ["ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
-
-    social_datasets = [transforms(FacebookDataset(os.getcwd() +'/original_datasets/' +'facebook_large', stage = "val", num=num)),
-                       transforms(EgoDataset(os.getcwd() +'/original_datasets/' +'twitch_egos', stage = "val", num=num)),
-                       transforms(CoraDataset(os.getcwd() +'/original_datasets/' +'cora', stage = "val", num=num)),
-                       transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage="val", num=num)),
-                       transforms(NeuralDataset(os.getcwd() +'/original_datasets/' +'fruit_fly', stage = "val", num=num)),
-                       transforms(TreeDataset(os.getcwd() +'/original_datasets/' +'trees', stage = "val", num=num)),
-                       transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage="val", num=num)),
-                       transforms(CommunityDataset(os.getcwd() +'/original_datasets/' +'community', stage = "val", num=num))
-                       ]
-
-    # For each open graph benchmark dataset, move back to a pyg.data.InMemoryDataset
-    datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in ogbg_names]
-    split_idx = [data.get_idx_split() for data in datasets]
-
-    # Get validation splits for each ogbg dataset, and trim if longer than num
-    datasets = [data[split_idx[i]["test"]] for i, data in enumerate(datasets)]
-    dataset_lengths = [len(data) for data in datasets]
-
-    for i, data in enumerate(datasets):
-        if dataset_lengths[i] > num:
-            datasets[i] = data[:num]
-    print("\n", datasets, "\n")
-    datasets = [FromOGBDataset(os.getcwd() +'/original_datasets/' + ogbg_names[i], data, stage = "val", num=num) for i, data in enumerate(datasets)]
-
-    datasets = datasets + [FromOGBDataset(os.getcwd()+'/original_datasets/'+'ogbg-molesol', dataset, stage = "val")]
-    all_datasets = datasets + social_datasets
-
-    datasets = [DataLoader(data, batch_size=batch_size) for data in all_datasets]
-
-    return datasets, ogbg_names + ["ogbg-molesol", "facebook_large", "twitch_egos", "cora", "roads", "fruit_fly",
-                                   "trees",  "random", "community"]
 
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """
@@ -282,15 +164,17 @@ def get_task_type(loader, name):
     return task
 
 def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model.eval()
     with torch.no_grad():
         ys, y_preds = [], []
         for batch in test_loader:
+            batch.to(device)
             y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
             y = batch.y
 
             if type(y) is list:
-                y = torch.tensor(y)
+                y = torch.tensor(y).to(device)
 
             if task == "classification":
                 y_pred = out_fn(y_pred).flatten()
@@ -334,22 +218,25 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
     if checkpoint_path != "untrained":
         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
+    model.to(device)
 
     out_fn = Sigmoid()
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
     print(f"\nName: {name}, State: {model_name}")
     pbar = tqdm(range(n_epochs), leave=False)
+    best_val_loss, best_epoch = 1.e9, 0
     train_losses, val_losses = [], []
     for i_epoch in pbar:
         model.train()
         # ys, y_preds = [], []
         for i_batch, batch in enumerate(val_loader):
+            model.zero_grad()
             # set up
             batch = batch.to(device)
             y = batch.y
 
             if type(y) is list:
-                y = torch.tensor(y)
+                y = torch.tensor(y).to(device)
 
             y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
             if task == "classification":
@@ -358,31 +245,24 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
                     y = y[:, 0]
             y = y.to(y_pred.dtype)
 
-            model.zero_grad()
-
-            # model_loss = model.calc_loss(y, y_pred)
             model_loss = loss_fn(y_pred, y)
-
             train_losses.append(model_loss.item())
 
-
-            # ys += y.cpu().numpy().tolist()
-            # y_preds += y_pred.cpu().numpy().tolist()
-
-            # standard gradient descent formulation
             model_loss.backward()
             model_optimizer.step()
         if i_epoch == 0:
             print(f"Untrained Score: {evaluate_model(model, test_loader, score_fn, out_fn, loss_fn,  task)[0]}")
         pbar.set_description(str(model_loss.item())[:6])
         _, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = i_epoch
+            final_score = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)[0]
+
         val_losses.append(val_loss.item())
-    final_score = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn,  task)[0]
+
     print(f"Final Score: {final_score}")
-
-
-
-
 
     fig, ax = plt.subplots(figsize=(6,4))
     ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
@@ -391,7 +271,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
     plt.savefig(f"outputs/{model_name}/{name}.png")
     plt.close()
 
-    return train_losses, val_losses, final_score
+    return train_losses, val_losses, final_score, best_epoch, best_val_loss
 
 
 def run(args):
@@ -404,6 +284,7 @@ def run(args):
 
     num = args.num
     checkpoint = args.checkpoint
+    evaluation_node_features = args.node_features
 
     if checkpoint == "latest":
         checkpoint_root = "wandb/latest-run/files"
@@ -434,22 +315,12 @@ def run(args):
 
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
-    # Retrieved saved models and load weights
-
-    # model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-    #                 proj_hidden_dim=args.emb_dim).to(device)
-
-
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    dataset = PygGraphPropPredDataset(name=args.dataset, root='./original_datasets/', transform=my_transforms)
-    split_idx = dataset.get_idx_split()
-    test_loaders, names = get_test_loaders(dataset[split_idx["test"]], args.batch_size, my_transforms, num=num)
-    val_loaders, names = get_val_loaders(dataset[split_idx["valid"]], args.batch_size, my_transforms, num=2*num)
+
+    test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-
-
-
 
     for i in range(len(val_loaders)):
         val_loader = val_loaders[i]
@@ -462,48 +333,54 @@ def run(args):
         model = TransferModel(
             MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                             pooling_type=args.pooling_type),
-            proj_hidden_dim=args.emb_dim, output_dim=1).to(device)
+            proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
 
         # try:
-        num_epochs = 10
-        pretrain_train_losses, pretrain_val_losses, pretrain_val_score = fine_tune(model, checkpoint_path, val_loader, test_loader,
-                                                               name = name, n_epochs=num_epochs)
+        num_epochs = 50
+        pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
+                                                                                                                                checkpoint_path,
+                                                                                                                                val_loader,
+                                                                                                                                test_loader,
+                                                                                                                                name = name,
+                                                                                                                                n_epochs=num_epochs)
 
         model = TransferModel(
             MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                             pooling_type=args.pooling_type),
-            proj_hidden_dim=args.emb_dim, output_dim=1).to(device)
+            proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
 
-        untrain_train_losses, untrain_val_losses, untrain_val_score = fine_tune(model, "untrained", val_loader, test_loader,
-                                                               name = name, n_epochs=num_epochs)
+        untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
+                                                                                                                          "untrained",
+                                                                                                                          val_loader,
+                                                                                                                          test_loader,
+                                                                                                                          name = name,
+                                                                                                                          n_epochs=num_epochs)
 
         untrain_val_score = str(untrain_val_score)[:6]
         pretrain_val_score = str(pretrain_val_score)[:6]
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), pretrain_val_losses, label=f"Pre-Trained (MuD), Final score: {pretrain_val_score}")
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), untrain_val_losses, label=f"From Scratch, Final score: {untrain_val_score}")
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), pretrain_val_losses,
+                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}, Best epoch: {pretrain_best_epoch}",
+                c = "orange")
+
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), untrain_val_losses,
+                label=f"From Scratch, Best score: {untrain_val_score}, Best epoch: {untrain_best_epoch}",
+                c = "blue")
+
+        ax.axhline(pretrain_best_val_loss, label = "Pre-train lowest val loss", c = "orange")
+        ax.axhline(untrain_best_val_loss, label="Un-train lowest val loss", c = "blue")
+
         ax.legend(shadow=True)
         ax.set_xlabel("Batch")
         ax.set_ylabel("Validation Loss")
 
-        if max(pretrain_val_losses + untrain_val_losses) > 2000:
-            ax.set_yscale('log')
+        # if max(pretrain_val_losses + untrain_val_losses) > 2000:
+        ax.set_yscale('log')
 
-        plt.savefig(f"outputs/{name}/{model_name}.png")
+        features_string_tag = "feats" if evaluation_node_features else "no-feats"
+        plt.savefig(f"outputs/{name}/{model_name}-{features_string_tag}.png")
         plt.close()
-
-        # except:
-        #     pass
-
-    # Get embeddings
-    # general_ee = GeneralEmbeddingEvaluation()
-    # model.eval()
-    # all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
-
-
-
-    # general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names, use_wandb=False)
 
 
 
@@ -525,7 +402,7 @@ def arg_parse():
                         help='embedding dimension')
     parser.add_argument('--mlp_edge_model_dim', type=int, default=32,
                         help='embedding dimension')
-    parser.add_argument('--batch_size', type=int, default=512,
+    parser.add_argument('--batch_size', type=int, default=256,
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
@@ -542,6 +419,13 @@ def arg_parse():
                         help='Whether to re-vis views')
 
     parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
+
+    parser.add_argument(
+        '-f',
+        '--node-features',
+        action='store_true',
+        help='Whether to include node features (labels) in evaluation',
+    )
 
     return parser.parse_args()
 
