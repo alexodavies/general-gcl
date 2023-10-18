@@ -362,14 +362,14 @@ def run(args):
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), pretrain_val_losses,
                 label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}, Best epoch: {pretrain_best_epoch}",
-                c = "orange")
+                c = "green")
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)), untrain_val_losses,
                 label=f"From Scratch, Best score: {untrain_val_score}, Best epoch: {untrain_best_epoch}",
                 c = "blue")
 
-        ax.axhline(pretrain_best_val_loss, label = "Pre-train lowest val loss", c = "orange")
-        ax.axhline(untrain_best_val_loss, label="Un-train lowest val loss", c = "blue")
+        ax.axhline(pretrain_best_val_loss, c = "green", linestyle="dashed")
+        ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
 
         ax.legend(shadow=True)
         ax.set_xlabel("Batch")
