@@ -317,20 +317,39 @@ def run(args):
         pretrain_val_score = str(best_pretrain_score)[:6]
 
         pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
+        untrain_val_loss_mean = np.mean(untrain_val, axis=0)
+        pretrain_val_loss_dev = np.std(pretrain_val, axis=0)
+        untrain_val_loss_dev = np.std(untrain_val, axis=0)
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)),
+
+
+        ax.errorbar(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
                 pretrain_val_losses,
-                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}, Best epoch: {pretrain_best_epoch}",
+                yerr = pretrain_val_loss_dev,
+                alpha = 0.5,
                 c = "green")
 
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=len(pretrain_val_losses)),
+        ax.errorbar(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
                 untrain_val_losses,
-                label=f"From Scratch, Best score: {untrain_val_score}, Best epoch: {untrain_best_epoch}",
+                yerr = untrain_val_loss_dev,
+                alpha = 0.5,
                 c = "blue")
 
-        ax.axhline(pretrain_best_val_loss, c = "green", linestyle="dashed")
-        ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
+
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+                pretrain_val_losses,
+                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}",
+                c = "green")
+
+        ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+                untrain_val_losses,
+                label=f"From Scratch, Best score: {untrain_val_score}",
+                c = "blue")
+
+
+        # ax.axhline(pretrain_best_val_loss, c = "green", linestyle="dashed")
+        # ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
 
         ax.legend(shadow=True)
         ax.set_xlabel("Epoch")
