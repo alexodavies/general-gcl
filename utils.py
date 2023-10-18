@@ -124,7 +124,7 @@ def better_to_nx(data):
 
     return g, labels
 
-def setup_wandb(cfg):
+def setup_wandb(cfg, offline = False):
     """
     Uses a config dictionary to initialise wandb to track sampling.
     Requires a wandb account, https://wandb.ai/
@@ -136,7 +136,7 @@ def setup_wandb(cfg):
     """
 
     kwargs = {'name': 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline' if offline else 'online'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
 
