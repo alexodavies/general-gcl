@@ -150,7 +150,6 @@ results/qm9_molecules_h
 results/qm9_molecules_noh
 dgd/analysis/orca/orca
 results/*
-outputs/
 #data/
 ggg_data/
 ggg_utils/
