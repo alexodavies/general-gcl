@@ -100,29 +100,29 @@ def get_train_loader(batch_size, transforms, num_social = 20000):
 
     return DataLoader(combined, batch_size=batch_size, shuffle=True)
 
-def get_val_loaders(batch_size, transforms, num = 2000):
-    """
-    Get a list of validation loaders
-
-    Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
-        batch_size: batch size for loaders
-        transforms: a set of transforms applied to the data
-        num: the maximum number of samples in each dataset (and therefore dataloader)
-
-    Returns:
-        datasets: list of dataloaders
-        names: name of each loaders' respective dataset
-
-    """
-
-    chemical_datasets, ogbg_names = get_chemical_datasets(transforms, num, stage="val")
-    social_datasets, social_names = get_social_datasets(transforms, num, stage="val")
-
-    datasets = chemical_datasets + social_datasets
-    datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
-
-    return datasets, ogbg_names + social_names
+# def get_val_loaders(batch_size, transforms, num = 2000):
+#     """
+#     Get a list of validation loaders
+#
+#     Args:
+#         dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
+#         batch_size: batch size for loaders
+#         transforms: a set of transforms applied to the data
+#         num: the maximum number of samples in each dataset (and therefore dataloader)
+#
+#     Returns:
+#         datasets: list of dataloaders
+#         names: name of each loaders' respective dataset
+#
+#     """
+#
+#     chemical_datasets, ogbg_names = get_chemical_datasets(transforms, num, stage="val")
+#     social_datasets, social_names = get_social_datasets(transforms, num, stage="val")
+#
+#     datasets = chemical_datasets + social_datasets
+#     datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
+#
+#     return datasets, ogbg_names + social_names
 
 def get_test_loaders(batch_size, transforms, num = 2000):
     """
@@ -140,11 +140,47 @@ def get_test_loaders(batch_size, transforms, num = 2000):
 
     """
 
+    datasets, names = get_test_datasets(transforms, num=num)
+    datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
+
+    return datasets, names
+
+def get_test_datasets(transforms, num = 2000):
+
     chemical_datasets, ogbg_names = get_chemical_datasets(transforms, num, stage="test")
     social_datasets, social_names = get_social_datasets(transforms, num, stage="test")
 
     datasets = chemical_datasets + social_datasets
 
+    return datasets, ogbg_names + social_names
+
+def get_val_loaders(batch_size, transforms, num = 2000):
+    """
+    Get a list of validation loaders
+
+    Args:
+        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
+        batch_size: batch size for loaders
+        transforms: a set of transforms applied to the data
+        num: the maximum number of samples in each dataset (and therefore dataloader)
+
+    Returns:
+        datasets: list of dataloaders
+        names: name of each loaders' respective dataset
+
+    """
+
+    datasets, names = get_val_datasets(transforms, num = num)
     datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
 
+    return datasets, names
+
+def get_val_datasets(transforms, num = 2000):
+
+    chemical_datasets, ogbg_names = get_chemical_datasets(transforms, num, stage="val")
+    social_datasets, social_names = get_social_datasets(transforms, num, stage="val")
+
+    datasets = chemical_datasets + social_datasets
+
     return datasets, ogbg_names + social_names
+

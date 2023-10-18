@@ -450,7 +450,6 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=num)
 
     # Visualise
