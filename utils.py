@@ -151,7 +151,7 @@ def ESWR(graph, n_graphs, size):
     sampler_list = []
     for sampler in possible_samplers:
         for i in range(24,96):
-            sampler.append(sampler(i))
+            sampler_list.append(sampler(i))
     # # selected_sampler = possible_samplers[np.random.randint(len(possible_samplers))]
     #
     #
