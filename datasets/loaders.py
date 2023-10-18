@@ -15,6 +15,9 @@ from datasets.from_ogb_dataset import FromOGBDataset
 
 
 def get_chemical_datasets(transforms, num, stage="train"):
+    if "original_datasets" not in os.listdir():
+        os.mkdir("original_datasets")
+
     if stage == "train":
         names = ["ogbg-molpcba"]
     else:
@@ -35,6 +38,9 @@ def get_chemical_datasets(transforms, num, stage="train"):
     return datasets, names
 
 def get_social_datasets(transforms, num, stage = "train"):
+    if "original_datasets" not in os.listdir():
+        os.mkdir("original_datasets")
+
     if stage == "train":
         social_datasets = [
             transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', num=num)),
