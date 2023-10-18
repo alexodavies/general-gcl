@@ -12,33 +12,13 @@ import networkx as nx
 import numpy as np
 import torch
 import yaml
-from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool, PanTool
-from bokeh.plotting import figure, output_file, show, ColumnDataSource
-from hdbscan import HDBSCAN
-from ogb.graphproppred import PygGraphPropPredDataset
 
-from umap import UMAP
-from sklearn.decomposition import TruncatedSVD
-from sklearn.manifold import SpectralEmbedding, Isomap
-
-from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
-from utils import better_to_nx
+from utils import better_to_nx, setup_wandb, wandb_cfg_to_actual_cfg
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 
-import wandb
-from datasets.community_dataset import CommunityDataset
-from datasets.cora_dataset import CoraDataset
-from datasets.ego_dataset import EgoDataset
-from datasets.facebook_dataset import FacebookDataset
-from datasets.from_ogb_dataset import FromOGBDataset
-from datasets.neural_dataset import NeuralDataset
-from datasets.random_dataset import RandomDataset
-from datasets.road_dataset import RoadDataset
-from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
 
 from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
 
@@ -57,25 +37,6 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-def setup_wandb(cfg):
-    """
-    Uses a config dictionary to initialise wandb to track sampling.
-    Requires a wandb account, https://wandb.ai/
-
-    params: cfg: argparse Namespace
-
-    returns:
-    param: cfg: same config
-    """
-
-    kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
-    wandb.init(**kwargs)
-    wandb.save('*.txt')
-
-    wandb.log({"Type":"Sampling"})
-
-    return cfg
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -84,29 +45,6 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-
-
-
-def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
-    """
-    Retrive wandb config from saved file
-    Args:
-        original_cfg: the config from this run
-        wandb_cfg: the saved config from the training run
-
-    Returns:
-        a config with values updated to those from the saved training run
-    """
-    original_keys = list(vars(original_cfg).keys())
-    wandb_keys = list(wandb_cfg.keys())
-
-    for key in original_keys:
-        if key not in wandb_keys:
-            continue
-
-        vars(original_cfg)[key] = wandb_cfg[key]['value']
-
-    return original_cfg
 
 
 def tidy_labels(labels):

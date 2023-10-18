@@ -26,7 +26,7 @@ from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
 import wandb
-from utils import better_to_nx, vis_from_pyg, vis_grid
+from utils import better_to_nx, vis_from_pyg, vis_grid, setup_wandb
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 
 from datasets.community_dataset import CommunityDataset
@@ -54,56 +54,12 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-def setup_wandb(cfg):
-    """
-    Uses a config dictionary to initialise wandb to track sampling.
-    Requires a wandb account, https://wandb.ai/
-
-    params: cfg: argparse Namespace
-
-    returns:
-    param: cfg: same config
-    """
-
-    kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
-    wandb.init(**kwargs)
-    wandb.save('*.txt')
-
-    wandb.log({"Type":"Sampling"})
-
-    return cfg
-
 def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     np.random.seed(seed)
     random.seed(seed)
-
-def better_to_nx(data):
-    """
-    Converts a pytorch_geometric.data.Data object to a networkx graph,
-    robust to nodes with no edges, unlike the original pytorch_geometric version
-
-    Args:
-        data: pytorch_geometric.data.Data object
-
-    Returns:
-        g: a networkx.Graph graph
-        labels: torch.Tensor of node labels
-    """
-    edges = data.edge_index.T.cpu().numpy()
-    labels = data.x[:,0].cpu().numpy()
-
-    g = nx.Graph()
-    g.add_edges_from(edges)
-
-    for ilabel in range(labels.shape[0]):
-        if ilabel not in np.unique(edges):
-            g.add_node(ilabel)
-
-    return g, labels
 
 class ComponentSlicer:
     def __init__(self, comp_1 = 0, comp_2 = 1):

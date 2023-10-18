@@ -3,7 +3,34 @@ import torch_geometric
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import wandb
+from datetime import datetime
 
+
+
+
+
+
+def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
+    """
+    Retrive wandb config from saved file
+    Args:
+        original_cfg: the config from this run
+        wandb_cfg: the saved config from the training run
+
+    Returns:
+        a config with values updated to those from the saved training run
+    """
+    original_keys = list(vars(original_cfg).keys())
+    wandb_keys = list(wandb_cfg.keys())
+
+    for key in original_keys:
+        if key not in wandb_keys:
+            continue
+
+        vars(original_cfg)[key] = wandb_cfg[key]['value']
+
+    return original_cfg
 
 def vis_from_pyg(data, filename = None, ax = None):
     """
@@ -94,6 +121,26 @@ def better_to_nx(data):
             g.add_node(ilabel)
 
     return g, labels
+
+def setup_wandb(cfg):
+    """
+    Uses a config dictionary to initialise wandb to track sampling.
+    Requires a wandb account, https://wandb.ai/
+
+    params: cfg: argparse Namespace
+
+    returns:
+    param: cfg: same config
+    """
+
+    kwargs = {'name': f"{cfg.dataset}-" + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl_{cfg.dataset}', 'config': cfg,
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline'}
+    wandb.init(**kwargs)
+    wandb.save('*.txt')
+
+    wandb.log({"Type":"Sampling"})
+
+    return cfg
 
 if __name__ == "__main__":
     g = nx.erdos_renyi_graph(100, 0.1)
