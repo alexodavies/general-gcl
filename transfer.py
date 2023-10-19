@@ -319,48 +319,55 @@ def run(args):
 
         pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
         untrain_val_loss_mean = np.mean(untrain_val, axis=0)
-        pretrain_val_loss_dev = np.std(pretrain_val, axis=0)
-        untrain_val_loss_dev = np.std(untrain_val, axis=0)
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        pretrain_val_loss_max = np.max(pretrain_val, axis=0)
+        untrain_val_loss_max = np.max(untrain_val, axis=0)
+
+        pretrain_val_loss_min = np.min(pretrain_val, axis=0)
+        untrain_val_loss_min = np.min(untrain_val, axis=0)
+
+        fig, ax = plt.subplots(figsize=(8, 6))
 
 
         ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_losses + pretrain_val_loss_dev,
-                pretrain_val_losses - pretrain_val_loss_dev,
+                pretrain_val_loss_max,
+                pretrain_val_loss_min,
                 alpha = 0.5,
-                c = "green")
+                color = "green")
 
         ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_losses + untrain_val_loss_dev,
-                untrain_val_losses - untrain_val_loss_dev,
+                untrain_val_loss_max,
+                untrain_val_loss_min,
                 alpha = 0.5,
-                c = "blue")
+                color = "blue")
 
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
                 pretrain_val_losses,
-                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score}",
+                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score} (w/ max, min)",
                 c = "green")
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
                 untrain_val_losses,
-                label=f"From Scratch, Best score: {untrain_val_score}",
+                label=f"From Scratch, Best score: {untrain_val_score} (w/ max, min)",
                 c = "blue")
 
 
         # ax.axhline(pretrain_best_val_loss, c = "green", linestyle="dashed")
         # ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
 
-        ax.legend(shadow=True)
+        ax.legend(loc = "upper right", shadow=True)
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Validation Loss")
+        ax.set_title(name)
 
         # if max(pretrain_val_losses + untrain_val_losses) > 2000:
         ax.set_yscale('log')
 
+        plt.tight_layout()
+
         features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        plt.savefig(f"outputs/{name}/{model_name}-{features_string_tag}.png")
+        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")
         plt.close()
 
 
