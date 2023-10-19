@@ -309,7 +309,7 @@ def arg_parse():
 
     parser.add_argument(
         '-c',
-        '--no-chemicals',
+        '--no-molecules',
         action='store_true',
         help='Whether to include molecules in training data',
     )
