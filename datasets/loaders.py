@@ -104,6 +104,7 @@ def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], nu
     datasets += social_datasets
     combined = []
     # Concat dataset
+    print(datasets)
     for data in datasets:
         combined += data
 
