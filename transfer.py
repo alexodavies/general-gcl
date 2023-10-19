@@ -222,6 +222,7 @@ def run(args):
     checkpoint = args.checkpoint
     evaluation_node_features = args.node_features
 
+
     if checkpoint == "latest":
         checkpoint_root = "wandb/latest-run/files"
         checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
@@ -414,6 +415,7 @@ def arg_parse():
         action='store_true',
         help='Whether to include node features (labels) in evaluation',
     )
+
 
     return parser.parse_args()
 

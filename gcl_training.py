@@ -152,12 +152,16 @@ def run(args):
         os.mkdir("original_datasets")
 
     evaluation_node_features = args.node_features
+    molecules = not args.no_molecules
+    socials = not args.no_socials
 
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
 
+    dataset_subset = ["chemical" if molecules else None,
+                      "social" if socials else None]
+    dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset)
 
-    dataloader = get_train_loader(args.batch_size, my_transforms)
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
@@ -300,6 +304,21 @@ def arg_parse():
         '--node-features',
         action='store_true',
         help='Whether to include node features (labels) in evaluation',
+    )
+
+
+    parser.add_argument(
+        '-c',
+        '--no-chemicals',
+        action='store_true',
+        help='Whether to include molecules in training data',
+    )
+
+    parser.add_argument(
+        '-s',
+        '--no-socials',
+        action='store_true',
+        help='Whether to include social (ie all other) graphs in training data',
     )
 
     parser.add_argument('--seed', type=int, default=0)

@@ -77,7 +77,7 @@ def get_social_datasets(transforms, num, stage = "train"):
 
     return social_datasets, names
 
-def get_train_loader(batch_size, transforms, num_social = 50000):
+def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], num_social = 50000):
     """
     Prepare a torch concat dataset dataloader
     Args:
@@ -89,9 +89,15 @@ def get_train_loader(batch_size, transforms, num_social = 50000):
     Returns:
         dataloader for concat dataset
     """
+    if "chemical" in subset:
+        datasets, _ = get_chemical_datasets(transforms, num_social, stage="train")
+    else:
+        datasets = []
 
-    datasets, _ = get_chemical_datasets(transforms, num_social, stage="train")
-    social_datasets, _ = get_social_datasets(transforms, num_social, stage="train")
+    if "social" in subset:
+        social_datasets, _ = get_social_datasets(transforms, num_social, stage="train")
+    else:
+        social_datasets = []
 
     datasets += social_datasets
     combined = []
