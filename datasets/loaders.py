@@ -92,11 +92,13 @@ def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], nu
     if "chemical" in subset:
         datasets, _ = get_chemical_datasets(transforms, num_social, stage="train")
     else:
+        print("Skipping chemicals")
         datasets = []
 
     if "social" in subset:
         social_datasets, _ = get_social_datasets(transforms, num_social, stage="train")
     else:
+        print("Skipping socials")
         social_datasets = []
 
     datasets += social_datasets

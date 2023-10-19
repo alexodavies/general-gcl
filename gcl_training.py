@@ -154,12 +154,14 @@ def run(args):
     evaluation_node_features = args.node_features
     molecules = not args.no_molecules
     socials = not args.no_socials
+    print(f"Chemicals: {molecules}, Socials: {socials}")
 
     evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
 
-    dataset_subset = ["chemical" if molecules else None,
-                      "social" if socials else None]
+    dataset_subset = ["chemical" if molecules else "dummy",
+                      "social" if socials else "dummy"]
+    print(f"Passing subset: {dataset_subset}")
     dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset)
 
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
