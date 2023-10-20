@@ -12,6 +12,7 @@ import networkx as nx
 import numpy as np
 import torch
 import yaml
+import wandb
 
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
@@ -188,7 +189,10 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
             model_loss.backward()
             model_optimizer.step()
         # pbar.set_description(str(model_loss.item())[:6])
-        _, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
+        val_score, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
+
+        wandb.log({f"{name}/Val-Loss":val_loss.item(),
+                   f"{name}/Val-Score":val_score})
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -216,11 +220,14 @@ def run(args):
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
+    wandb.log({"Transfer":True})
     # setup_seed(args.seed)
 
     num = args.num
     checkpoint = args.checkpoint
     evaluation_node_features = args.node_features
+
+
 
 
     if checkpoint == "latest":
@@ -251,6 +258,9 @@ def run(args):
                 print(e)
 
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+
+    model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    wandb.log({"Model Name": model_name})
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
@@ -319,6 +329,7 @@ def run(args):
 
 
 
+
         untrain_val_score = str(best_untrain_score)[:6]
         pretrain_val_score = str(best_pretrain_score)[:6]
 
@@ -337,7 +348,7 @@ def run(args):
         pretrain_dev_score = str(np.std(pretrain_scores))[:5]
         untrain_dev_score = str(np.std(untrain_scores))[:5]
 
-        model_name = checkpoint_path.split("/")[-1].split(".")[0]
+
 
         fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -381,6 +392,7 @@ def run(args):
 
         features_string_tag = "feats" if evaluation_node_features else "no-feats"
         plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")
+        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")})
         plt.close()
 
 
@@ -433,7 +445,7 @@ def arg_parse():
 
 
 if __name__ == '__main__':
-
     args = arg_parse()
+    setup_wandb(args)
     run(args)
 
