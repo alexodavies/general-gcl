@@ -520,12 +520,13 @@ class GeneralEmbeddingEvaluation():
 	def __init__(self):
 		self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names, use_wandb=True, node_features = False):
+	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names,
+							 use_wandb=True, node_features = False, not_in_training = False):
 
 		train_all_embeddings, train_separate_embeddings = self.get_embeddings(encoder, train_loaders, node_features=node_features)
 		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders, node_features=node_features)
 
-		if use_wandb:
+		if use_wandb and not not_in_training:
 			self.centroid_similarities(val_separate_embeddings, names)
 			self.vis(val_all_embeddings, val_separate_embeddings, names)
 
@@ -540,13 +541,15 @@ class GeneralEmbeddingEvaluation():
 			evaluator = TargetEvaluation()
 			score = evaluator.evaluate(train_embedding, val_embedding, train_loader, val_loader, name)
 
-			if use_wandb:
+			if use_wandb and not not_in_training:
 				wandb.log({name: score})
+			elif use_wandb:
+				wandb.log({f"linear_transfer/{name}": score})
 			# elif evaluator.task != "empty":
 			print(f"\nName: {name}\n Score: {score}\n Task: {evaluator.task}\n N samples: {evaluator.n_samples}")
 			total_score += score * evaluator.n_samples
 
-		if use_wandb:
+		if use_wandb and not not_in_training:
 			wandb.log({"Total Val Score":total_score})
 
 	def get_embeddings(self, encoder, loaders, use_wandb=True, node_features = False):

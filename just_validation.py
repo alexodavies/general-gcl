@@ -262,34 +262,54 @@ def run(args):
     num = args.num
     checkpoint = args.checkpoint
 
-    if checkpoint == "latest":
-        checkpoint_root = "wandb/latest-run/files"
-        checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-        print(checkpoints)
-        epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-        checkpoint_ind = np.argsort(epochs[::-1])[0]
+    wandb.log({"Linear Transfer":True})
+    node_features = args.node_features
 
-        checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    # if checkpoint == "latest":
+    #     checkpoint_root = "wandb/latest-run/files"
+    #     checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+    #     print(checkpoints)
+    #     epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+    #     checkpoint_ind = np.argsort(epochs[::-1])[0]
+    #
+    #     checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    #
+    # elif checkpoint == "untrained":
+    checkpoint_path = f"outputs/{checkpoint}"
+    cfg_name = checkpoint.split('.')[0] + ".yaml"
+    config_path = f"outputs/{cfg_name}"
 
-    elif checkpoint == "untrained":
-        pass
+    with open(config_path, 'r') as stream:
+        try:
+            # Converts yaml document to python object
+            wandb_cfg = yaml.safe_load(stream)
 
-    else:
-        checkpoint_path = f"outputs/{checkpoint}"
-        cfg_name = checkpoint.split('.')[0] + ".yaml"
-        config_path = f"outputs/{cfg_name}"
+            # Printing dictionary
+            print(wandb_cfg)
+        except yaml.YAMLError as e:
+            print(e)
 
-        with open(config_path, 'r') as stream:
-            try:
-                # Converts yaml document to python object
-                wandb_cfg = yaml.safe_load(stream)
+    args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+    #
+    # else:
+    #     checkpoint_path = f"outputs/{checkpoint}"
+    #     cfg_name = checkpoint.split('.')[0] + ".yaml"
+    #     config_path = f"outputs/{cfg_name}"
+    #
+    #     with open(config_path, 'r') as stream:
+    #         try:
+    #             # Converts yaml document to python object
+    #             wandb_cfg = yaml.safe_load(stream)
+    #
+    #             # Printing dictionary
+    #             print(wandb_cfg)
+    #         except yaml.YAMLError as e:
+    #             print(e)
+    #
+    #     args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
-                # Printing dictionary
-                print(wandb_cfg)
-            except yaml.YAMLError as e:
-                print(e)
-
-        args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+    model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    wandb.log({"Model Name": model_name})
 
     # Retrieved saved models and load weights
 
@@ -315,7 +335,8 @@ def run(args):
     model.eval()
     # all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
 
-    general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names, use_wandb=False)
+    general_ee.embedding_evaluation(model.encoder, train_loaders, val_loaders, names,
+                                    node_features=node_features, not_in_training=True)
 
 
 
@@ -355,11 +376,19 @@ def arg_parse():
 
     parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
 
+    parser.add_argument(
+        '-f',
+        '--node-features',
+        action='store_true',
+        help='Whether to include node features (labels) in evaluation',
+    )
+
     return parser.parse_args()
 
 
 if __name__ == '__main__':
 
     args = arg_parse()
+    setup_wandb(args)
     run(args)
 
