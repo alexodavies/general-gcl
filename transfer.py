@@ -163,7 +163,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
     # pbar = tqdm(range(n_epochs), leave=False)
     best_val_loss, best_epoch = 1.e9, 0
     train_losses, val_losses = [], []
-    for i_epoch in range(n_epochs):
+    for i_epoch in tqdm(range(n_epochs), leave=False):
         model.train()
         # ys, y_preds = [], []
         for i_batch, batch in enumerate(val_loader):
@@ -278,6 +278,7 @@ def run(args):
 
         pretrain_val = np.zeros((n_repeats, num_epochs))
         untrain_val = np.zeros((n_repeats, num_epochs))
+        pretrain_scores, untrain_scores = [], []
 
         pbar = tqdm(range(n_repeats))
         for n in pbar:
@@ -308,6 +309,9 @@ def run(args):
             scores = "Pretrain:" + str(pretrain_val_score)[:5] + "  Untrain:" + str(untrain_val_score)[:5]
             pbar.set_description(scores)
 
+            pretrain_scores.append(pretrain_val_score)
+            untrain_scores.append(untrain_val_score)
+
             if pretrain_val_score <= best_pretrain_score:
                 best_pretrain_score = pretrain_val_score
             if untrain_val_score <= best_untrain_score:
@@ -327,6 +331,14 @@ def run(args):
         pretrain_val_loss_min = np.min(pretrain_val, axis=0)
         untrain_val_loss_min = np.min(untrain_val, axis=0)
 
+        pretrain_mean_score = str(np.mean(pretrain_scores))[:5]
+        untrain_mean_score = str(np.mean(untrain_scores))[:5]
+
+        pretrain_dev_score = str(np.std(pretrain_scores))[:5]
+        untrain_dev_score = str(np.std(untrain_scores))[:5]
+
+        model_name = checkpoint_path.split("/")[-1].split(".")[0]
+
         fig, ax = plt.subplots(figsize=(8, 6))
 
 
@@ -345,12 +357,12 @@ def run(args):
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
                 pretrain_val_losses,
-                label=f"Pre-Trained (MuD), Best score: {pretrain_val_score} (w/ max, min)",
+                label=f"Pre-Trained ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
                 c = "green")
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
                 untrain_val_losses,
-                label=f"From Scratch, Best score: {untrain_val_score} (w/ max, min)",
+                label=f"From Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
                 c = "blue")
 
 
