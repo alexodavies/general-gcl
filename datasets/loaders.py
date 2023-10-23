@@ -21,7 +21,7 @@ def get_chemical_datasets(transforms, num, stage="train"):
     if stage == "train":
         names = ["ogbg-molpcba"]
     else:
-        names = ["ogbg-molesol","ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
+        names = ["ogbg-molpcba", "ogbg-molesol","ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo"]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
@@ -34,7 +34,9 @@ def get_chemical_datasets(transforms, num, stage="train"):
 
     # Need to convert to pyg inmemorydataset
     num = num if stage != "train" else 5*num
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num, stage=stage) for i, data in enumerate(datasets)]
+    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i],
+                               data,
+                               num=num if names[i] != "ogbg-molpcba" else 5*num, stage=stage) for i, data in enumerate(datasets)]
 
     return datasets, names
 

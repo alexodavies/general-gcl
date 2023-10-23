@@ -7,6 +7,8 @@ import wandb
 from datetime import datetime
 from littleballoffur.exploration_sampling import *
 from tqdm import tqdm
+from rdkit import Chem
+from rdkit.Chem import Draw
 
 
 
@@ -34,7 +36,31 @@ def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
 
     return original_cfg
 
-def vis_from_pyg(data, filename = None, ax = None):
+
+def nx_to_rdkit(graph, labels):
+    m = Chem.MolFromSmiles('')
+    mw = Chem.RWMol(m)
+    atom_index = {}
+    for n, d in graph.nodes(data=True):
+        label = labels[n]
+        atom_index[n] = mw.AddAtom(Chem.Atom(int(label) + 1))
+    for a, b, d in graph.edges(data=True):
+        start = atom_index[a]
+        end = atom_index[b]
+        mw.AddBond(start, end, Chem.BondType.SINGLE)
+
+
+    mol = mw.GetMol()
+    return mol
+
+
+def vis_molecule(molecule):
+    im = Chem.Draw.MolToImage(molecule, size=(600, 600))
+
+    return im
+
+
+def vis_from_pyg(data, filename = None, ax = None, save = True):
     """
     Visualise a pytorch_geometric.data.Data object
     Args:
@@ -52,15 +78,21 @@ def vis_from_pyg(data, filename = None, ax = None):
     else:
         ax_was_none = False
 
-    pos = nx.kamada_kawai_layout(g)
+    if "ogbg" not in filename:
+        pos = nx.kamada_kawai_layout(g)
 
-    nx.draw_networkx_edges(g, pos = pos, ax = ax)
-    if np.unique(labels).shape[0] != 1:
-        nx.draw_networkx_nodes(g, pos=pos, node_color=labels, cmap="tab20", node_size=64,
-                               vmin=0, vmax=20, ax=ax)
+        nx.draw_networkx_edges(g, pos = pos, ax = ax)
+        if np.unique(labels).shape[0] != 1:
+            nx.draw_networkx_nodes(g, pos=pos, node_color=labels,
+                                   edgecolors="black",
+                                   cmap="Dark2", node_size=64,
+                                   vmin=0, vmax=10, ax=ax)
+    else:
+        im = vis_molecule(nx_to_rdkit(g, labels))
+        ax.imshow(im)
 
     ax.axis('off')
-    ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
+    # ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
 
     plt.tight_layout()
 
@@ -69,7 +101,7 @@ def vis_from_pyg(data, filename = None, ax = None):
     elif filename is None:
         plt.show()
     else:
-        plt.savefig(filename)
+        plt.savefig(filename, dpi = 300)
         plt.close()
 
     plt.close()
@@ -96,7 +128,7 @@ def vis_grid(datalist, filename):
     axes = [num for sublist in axes for num in sublist]
 
     for i_axis, ax in enumerate(axes):
-        ax = vis_from_pyg(datalist[i_axis], ax = ax)
+        ax = vis_from_pyg(datalist[i_axis], ax = ax, filename=filename, save = False)
 
     plt.savefig(filename)
 
