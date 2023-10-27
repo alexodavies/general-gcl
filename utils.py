@@ -10,11 +10,6 @@ from tqdm import tqdm
 from rdkit import Chem
 from rdkit.Chem import Draw
 
-
-
-
-
-
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """
     Retrive wandb config from saved file
@@ -131,6 +126,7 @@ def vis_grid(datalist, filename):
         ax = vis_from_pyg(datalist[i_axis], ax = ax, filename=filename, save = False)
 
     plt.savefig(filename)
+    plt.close()
 
 def better_to_nx(data):
     """

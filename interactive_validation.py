@@ -10,6 +10,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import pandas as pd
 import torch
 import yaml
 from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool, PanTool
@@ -18,16 +19,20 @@ from hdbscan import HDBSCAN
 from ogb.graphproppred import PygGraphPropPredDataset
 
 from umap import UMAP
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, PCA
 from sklearn.manifold import SpectralEmbedding, Isomap
 
 from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
+from sklearn.linear_model import LinearRegression
 
 import wandb
 from utils import better_to_nx, vis_from_pyg, vis_grid, setup_wandb
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from seaborn import kdeplot
+
+from sklearn.preprocessing import StandardScaler
 
 from datasets.community_dataset import CommunityDataset
 from datasets.cora_dataset import CoraDataset
@@ -73,6 +78,8 @@ class ComponentSlicer:
         return np.concatenate((X[:, self.comp_1].reshape(-1,1), X[:, self.comp_2].reshape(-1,1)), axis=1)
 
 def average_degree(g):
+    if nx.number_of_edges(g)/nx.number_of_nodes(g) < 1:
+        print(g)
     return nx.number_of_edges(g)/nx.number_of_nodes(g)
 #
 def safe_diameter(g):
@@ -89,12 +96,19 @@ def safe_diameter(g):
     except:
         return -1
 
+def three_cycles(g):
+    """
+    Returns the number of 4-cycles in a graph, normalised by the number of nodes
+    """
+    cycles = nx.simple_cycles(g, 3)
+    return len(list(cycles))
+
 def four_cycles(g):
     """
     Returns the number of 4-cycles in a graph, normalised by the number of nodes
     """
     cycles = nx.simple_cycles(g, 4)
-    return len(list(cycles)) / g.order()
+    return len(list(cycles))
 
 def five_cycle_worker(g):
     """
@@ -120,7 +134,56 @@ def five_cycles(graphs):
 
     return sample_ref
 
-def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
+
+def prettify_metric_name(metric):
+    try:
+        metric_name = str(metric).split(' ')[1]
+    except:
+        metric_name = str(metric)
+    # metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
+    #            average_degree, nx.average_clustering, nx.transitivity]
+    pretty_dict = {"number_of_nodes": "Num. Nodes",
+                   "number_of_edges": "Num. Edges",
+                   "density": "Density",
+                   "safe_diameter": "Diameter",
+                   "average_degree": "Avg. Degree",
+                   "average_clustering": "Avg. Clustering",
+                   "transitivity": "Transitivity",
+                   "three_cycles": "Num. 3-Cycles",
+                   "four_cycles":"Num. 4-Cycles"}
+
+    return pretty_dict[metric_name]
+
+def clean_graph(g):
+    Gcc = sorted(nx.connected_components(g), key=len, reverse=True)
+    g = g.subgraph(Gcc[0]).copy()
+    g.remove_edges_from(nx.selfloop_edges(g))
+
+    return g
+
+def get_metric_values(loaders):
+
+    # Iterate over items in loaders and convert to nx graphs, while removing selfloops
+    val_data = []
+    for loader in loaders:
+        for batch in loader:
+            val_data += batch.to_data_list()
+
+    val_data = [better_to_nx(data)[0] for data in val_data]
+    for i, item in enumerate(val_data):
+        # item.remove_edges_from(nx.selfloop_edges(item))
+        val_data[i] = clean_graph(item)
+
+    # Metrics can be added here - should take an nx graph as input and return a numerical value
+    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
+               nx.average_clustering, nx.transitivity] #, average_degree, ]
+    metric_names = [prettify_metric_name(metric) for metric in metrics]
+    # Compute metrics for all graphs
+    metric_arrays = [np.array([metric(g) for g in tqdm(val_data, leave=False, desc=metric_names[i_metric])]) for i_metric, metric in enumerate(metrics)]
+
+    return metrics, metric_arrays, metric_names
+
+def embeddings_vs_metrics(metrics, metric_arrays, metric_names, embeddings, n_components = 5, model_name = ""):
     """
     Compute the correlations between a set of metrics and the SVD decomposition of an embedding
     The results are currently printed in-terminal
@@ -134,27 +197,10 @@ def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
         None (currently)
     """
 
-    # Iterate over items in loaders and convert to nx graphs, while removing selfloops
-    val_data = []
-    for loader in loaders:
-        for batch in loader:
-            val_data += batch.to_data_list()
-
-    val_data = [better_to_nx(data)[0] for data in val_data]
-    for item in val_data:
-        item.remove_edges_from(nx.selfloop_edges(item))
-
-
-    # Project embedding using SVD
-    embedder = TruncatedSVD(n_components=n_components).fit(embeddings)
+    embedder = PCA().fit(embeddings)
+    print(model_name)
+    print(f"Explained variances total {np.sum(embedder.explained_variance_ratio_)}")
     projection = embedder.transform(embeddings)
-
-    # Metrics can be added here - should take an nx graph as input and return a numerical value
-    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity]
-
-    # Compute metrics for all graphs
-    metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
 
     # 5-cycles is multi-processed, so needs to be handled differently
     # metric_arrays += [np.array(five_cycles(val_data[::10]))]
@@ -171,33 +217,97 @@ def embeddings_vs_metrics(loaders, embeddings, n_components = 10):
         except:
             correlations = [np.corrcoef(projected[::10][metric != -1], metric[metric != -1])[0, 1] for metric in
                             metric_arrays]
+        print(f"Comp {component}, correlations: {correlations}")
         max_inds = np.argsort(np.abs(correlations))
-        max_ind = max_inds[-1]
 
-        exp_variance = str(embedder.explained_variance_ratio_[component])[:5]
-        exp_corr = str(correlations[max_ind])[:5]
-        try:
-            metric_name = str(metrics[max_ind]).split(' ')[1]
-        except:
-            metric_name = str(metrics[max_ind])
-
-        print("-"*40)
-        print(f"PCA component {component}, explained variance {exp_variance}%, correlated best with {metric_name} (R2: {exp_corr})")
-        print("Extra detail:")
-        for i_metric, corr in enumerate(correlations):
-            metric = metrics[i_metric]
-            try:
-                metric_name = str(metric).split(' ')[1]
-            except:
-                metric_name = str(metric)
-            print(f"{metric_name} corr. {corr}")
+        # for ind in max_inds[:3].tolist():
+        component_vs_metric(metric_arrays[max_inds[-1]], projected, metric = metrics[max_inds[-1]], model_name = model_name + f"-component-{component}")
 
         if component < 6:
             correlations = [np.around(corr, decimals=3) for corr in correlations]
-            # print(f"SVD {component} & {exp_variance} & {str(metrics[max_inds[-1]]).split(' ')[1]} & {correlations[max_inds[-1]]} & {str(metrics[max_inds[-2]]).split(' ')[1]} & {correlations[max_inds[-2]]} & {str(metrics[max_inds[-3]]).split(' ')[1]} & {correlations[max_inds[-3]]} \\\\")
-            print_items += f"SVD {component} & {exp_variance[:5]} & {str(metrics[max_inds[-1]]).split(' ')[1]} & {correlations[max_inds[-1]]} & {str(metrics[max_inds[-2]]).split(' ')[1]} & {correlations[max_inds[-2]]} & {str(metrics[max_inds[-3]]).split(' ')[1]} & {correlations[max_inds[-3]]} \\\\ \n"
+            exp_variance_string = embedder.explained_variance_ratio_[component]
+            exp_variance_string = float('%.3g' % exp_variance_string)
+            exp_variance_string = python_index_to_latex('{:.2e}'.format(exp_variance_string))
+
+            print_items += f"PCA {component} & {exp_variance_string} & {metric_names[max_inds[-1]]} & {correlations[max_inds[-1]]} & {metric_names[max_inds[-2]]} & {correlations[max_inds[-2]]} & {metric_names[max_inds[-3]]} & {correlations[max_inds[-3]]} \\\\ \n"
 
     print(print_items)
+
+def component_vs_metric(metric_values, component, metric = nx.number_of_nodes, model_name = ""):
+    # print(f"Corr. value: {np.corrcoef(metric_values, component)}")
+
+    fig, ax = plt.subplots(figsize=(5,5))
+
+    outliers_metric, outliers_comp = is_outlier(metric_values, thresh=2), is_outlier(component)
+    outliers = outliers_metric + outliers_comp
+
+    x_min, x_max = np.min(metric_values[~outliers]), np.max(metric_values[~outliers])
+    y_min, y_max = np.min(component[~outliers]), np.max(component[~outliers])
+
+    # metric_values = metric_values[~outliers]
+    # component = component[~outliers]
+
+    # print(metric_values.shape, component.shape)
+
+    ax.scatter(x = metric_values, y = component, marker="x",
+               alpha=0.2, s = 2, c = "black")
+
+    ax.set_xlabel(f"{prettify_metric_name(metric)}")
+    ax.set_ylabel(f"Component-{model_name[-1]}")
+
+    if x_min == 0:
+        x_min -= 0.2*x_max
+    elif x_min < 0:
+        x_min = 1.3 * x_min
+    else:
+        x_min = 0.7 * x_min
+
+    ax.set_xlim([x_min, x_max])
+    ax.set_ylim([y_min, y_max])
+
+    ax.grid(False)
+
+    plt.tight_layout()
+    plt.savefig(f"outputs/{model_name}-{prettify_metric_name(metric)}.png", dpi = 450)
+    plt.close()
+
+def is_outlier(points, thresh=3):
+    """
+    Returns a boolean array with True if points are outliers and False
+    otherwise.
+
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+
+    References:
+    ----------
+        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+        Handle Outliers", The ASQC Basic References in Quality Control:
+        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh
+
+def python_index_to_latex(index: str):
+    index = index.replace('e', r'\times 10^{')
+    index = "$" + index + '}$'
+    return index
 
 
 def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
@@ -306,7 +416,6 @@ def vis_views(view_learner, loader, dataset_name, num = 10000, force_redo = Fals
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     data_directory = os.getcwd() + '/original_datasets/' + dataset_name
 
     if "views" not in os.listdir(data_directory):
@@ -468,99 +577,130 @@ def run(args):
         model.load_state_dict(model_dict['encoder_state_dict'])
         view_learner.load_state_dict(model_dict['view_state_dict'])
 
-
-    #
-    # # Visualise
-    # for i, loader in enumerate(val_loaders):
-    #     vis_vals(loader, names[i], num = num)
-    #     vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
-
-    # Get embeddings
     general_ee = GeneralEmbeddingEvaluation()
     model.eval()
     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
-    embeddings_vs_metrics(val_loaders, all_embeddings, n_components=10)
+
+    for emb in separate_embeddings:
+        print(emb.shape)
+
     #
-    #
-    # # quit()
-    #
-    # fig, ((ax1, ax2),(ax3, ax4)) = plt.subplots(nrows=2, ncols=2, figsize=(13,12))
+    # # Visualise
+    for i, loader in enumerate(val_loaders):
+        vis_vals(loader, names[i], num = num)
+        vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
+
+    # Get embeddings
+    # general_ee = GeneralEmbeddingEvaluation()
+    # model.eval()
+    # all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
+    # embeddings_vs_metrics(val_loaders, all_embeddings, n_components=5, model_name=checkpoint[:-3])
+
+    # fig, ((ax1, ax2),(ax3, ax4)) = plt.subplots(nrows=2, ncols=2, figsize=(11,9))
     # axes = [ax1, ax2, ax3, ax4]
-    # checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
-    # for i_ax, ax in enumerate(axes):
+    checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
+    metrics, metric_arrays, metric_names = get_metric_values(val_loaders)
+    # percentiles = [10., 10., 10., 0.5]
+    for i_ax, checkpoint in enumerate(checkpoints):
+
+        checkpoint = checkpoints[i_ax]
+
+        if checkpoint == "latest":
+            checkpoint_root = "wandb/latest-run/files"
+            checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+            print(checkpoints)
+            epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+            checkpoint_ind = np.argsort(epochs[::-1])[0]
+
+            checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+
+        elif checkpoint == "untrained":
+            checkpoint_path = "untrained"
+
+        else:
+            checkpoint_path = f"outputs/{checkpoint}"
+            cfg_name = checkpoint.split('.')[0] + ".yaml"
+            config_path = f"outputs/{cfg_name}"
+
+            with open(config_path, 'r') as stream:
+                try:
+                    # Converts yaml document to python object
+                    wandb_cfg = yaml.safe_load(stream)
+
+                    # Printing dictionary
+                    # print(wandb_cfg)
+                except yaml.YAMLError as e:
+                    # pass
+                    print(e)
+
+            args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+
+        # Retrieved saved models and load weights
+
+        model = GInfoMinMax(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            proj_hidden_dim=args.emb_dim).to(device)
+
+        view_learner = ViewLearner(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
+
+        if checkpoint != "untrained":
+            model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+            model.load_state_dict(model_dict['encoder_state_dict'])
+            view_learner.load_state_dict(model_dict['view_state_dict'])
+
+
+        # Get embeddings
+        general_ee = GeneralEmbeddingEvaluation()
+        model.eval()
+        all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
+
+        scaler = StandardScaler().fit(all_embeddings)
+        print(f"Scaler means: {scaler.mean_.shape}, vars: {scaler.var_.shape}")
+        all_embeddings = scaler.transform(all_embeddings)
+
+        print(f"All embeddings: {all_embeddings.shape}")
+
+        model_name = checkpoint_path.split("/")[-1].split(".")[0]
+        embeddings_vs_metrics(metrics, metric_arrays, metric_names, all_embeddings, n_components=5, model_name=model_name)
     #
-    #     checkpoint = checkpoints[i_ax]
+    #     scaler = StandardScaler().fit(all_embeddings)
+    #     print(f"Scaler means: {scaler.mean_.shape}, vars: {scaler.var_.shape}")
+    #     all_embeddings = scaler.transform(all_embeddings)
+    #     separate_embeddings = [scaler.transform(embedding) for embedding in separate_embeddings]
     #
-    #     if checkpoint == "latest":
-    #         checkpoint_root = "wandb/latest-run/files"
-    #         checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-    #         print(checkpoints)
-    #         epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-    #         checkpoint_ind = np.argsort(epochs[::-1])[0]
+    #     model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    #     print(f"{model_name}")
+    #     embedder = PCA(n_components=2).fit(all_embeddings)
+    #     proj = embedder.transform(all_embeddings)
     #
-    #         checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    #     # percentile = 5.
+    #     percentile = percentiles[i_ax]
+    #     nth_percentile_x, upper_nth_percentile_x = np.percentile(proj[:,0], q = percentile), np.percentile(proj[:,0], q = 100 - percentile)
+    #     nth_percentile_y, upper_nth_percentile_y = np.percentile(proj[:,1], q = percentile), np.percentile(proj[:,1], q = 100 - percentile)
     #
-    #     elif checkpoint == "untrained":
-    #         checkpoint_path = "untrained"
-    #
-    #     else:
-    #         checkpoint_path = f"outputs/{checkpoint}"
-    #         cfg_name = checkpoint.split('.')[0] + ".yaml"
-    #         config_path = f"outputs/{cfg_name}"
-    #
-    #         with open(config_path, 'r') as stream:
-    #             try:
-    #                 # Converts yaml document to python object
-    #                 wandb_cfg = yaml.safe_load(stream)
-    #
-    #                 # Printing dictionary
-    #                 print(wandb_cfg)
-    #             except yaml.YAMLError as e:
-    #                 print(e)
-    #
-    #         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
-    #
-    #     # Retrieved saved models and load weights
-    #
-    #     model = GInfoMinMax(
-    #         MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-    #                         pooling_type=args.pooling_type),
-    #         proj_hidden_dim=args.emb_dim).to(device)
-    #
-    #     view_learner = ViewLearner(
-    #         MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-    #                         pooling_type=args.pooling_type),
-    #         mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-    #
-    #     if checkpoint != "untrained":
-    #         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-    #         model.load_state_dict(model_dict['encoder_state_dict'])
-    #         view_learner.load_state_dict(model_dict['view_state_dict'])
-    #
-    #
-    #     # Get embeddings
-    #     general_ee = GeneralEmbeddingEvaluation()
-    #     model.eval()
-    #     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
-    #     # embeddings_vs_metrics(val_loaders, all_embeddings, n_components=10)
-    #
-    #     embedder = UMAP(n_components=2, n_jobs=8, verbose=1).fit(all_embeddings)
     #     for i, embedding in enumerate(separate_embeddings):
     #         proj = embedder.transform(embedding)
+    #
     #         ax.scatter(proj[:,0], proj[:,1],
-    #                    c = i * np.ones(embedding.shape[0]), cmap = "tab20",
+    #                    c = i * np.ones(proj.shape[0]), cmap = "tab20",
     #                    vmin = 0, vmax = len(separate_embeddings),
     #                    s = 3, alpha = 0.5,
     #                    label = names[i],
-    #                    zorder = int(5e3) - embedding.shape[0])
-    #     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    #     ax.set_title(model_name.split('-')[0].upper())
-    #     ax.axis('off')
+    #                    zorder = int(5e3) - proj.shape[0])
+    #
+    #         ax.set_xlim([nth_percentile_x, upper_nth_percentile_x])
+    #         ax.set_ylim([nth_percentile_y, upper_nth_percentile_y])
+    #
+    #     ax.set_title(f"{model_name.split('-')[0].upper()} - ({int(percentile)}/{int(100-percentile)})th percentile limits")
     #
     # leg = ax1.legend(fancybox = True,
     #                 loc="upper left",
     #                 ncol=1,
-    #                 bbox_to_anchor=(-0.2, 1),
+    #                 bbox_to_anchor=(-0.5, 1),
     #                 title="Dataset:",
     #                 markerscale=3.0,
     #                 title_fontsize="large",
@@ -570,13 +710,21 @@ def run(args):
     #
     #
     # plt.tight_layout()
-    # plt.axis('off')
-    # plt.savefig(f"outputs/{model_name}.png", dpi=300)
+    # # plt.axis('off')
+    # plt.savefig(f"outputs/all-models-pca.png", dpi=300)
+
+
+
+    # ===================================================================================================
 
 
     # embedder = ComponentSlicer(comp_1=10, comp_2=20)
     # embedder = Isomap(n_components=2, n_neighbors=250, n_jobs=6).fit(all_embeddings)
-    embedder = TruncatedSVD(n_components=10).fit(all_embeddings)
+    embedder = PCA(n_components=2).fit(all_embeddings)
+
+    proj_all = embedder.transform(all_embeddings)
+    # component_vs_metric(val_loaders, proj_all[:,0])
+    # embedder = TruncatedSVD(n_components=10).fit(all_embeddings)
     # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=6)
     # embedder.fit(all_embeddings)
 

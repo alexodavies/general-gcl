@@ -36,7 +36,7 @@ def get_chemical_datasets(transforms, num, stage="train"):
     num = num if stage != "train" else 5*num
     datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i],
                                data,
-                               num=num if names[i] != "ogbg-molpcba" else 5*num, stage=stage) for i, data in enumerate(datasets)]
+                               num=num, stage = stage) for i, data in enumerate(datasets)] #  if names[i] != "ogbg-molpcba" else 5*num, stage=stage
 
     return datasets, names
 
