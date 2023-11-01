@@ -321,16 +321,7 @@ def run(args):
 
         checkpoint = checkpoints[i_ax]
 
-        if checkpoint == "latest":
-            checkpoint_root = "wandb/latest-run/files"
-            checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-            print(checkpoints)
-            epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-            checkpoint_ind = np.argsort(epochs[::-1])[0]
-
-            checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
-
-        elif checkpoint == "untrained":
+        if checkpoint == "untrained":
             checkpoint_path = "untrained"
 
         else:
