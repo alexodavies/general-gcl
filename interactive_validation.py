@@ -236,7 +236,7 @@ def embeddings_vs_metrics(metrics, metric_arrays, metric_names, embeddings, n_co
 def component_vs_metric(metric_values, component, metric = nx.number_of_nodes, model_name = ""):
     # print(f"Corr. value: {np.corrcoef(metric_values, component)}")
 
-    fig, ax = plt.subplots(figsize=(5,5))
+    fig, ax = plt.subplots(figsize=(3.25,3))
 
     outliers_metric, outliers_comp = is_outlier(metric_values, thresh=2), is_outlier(component)
     outliers = outliers_metric + outliers_comp
@@ -250,7 +250,7 @@ def component_vs_metric(metric_values, component, metric = nx.number_of_nodes, m
     # print(metric_values.shape, component.shape)
 
     ax.scatter(x = metric_values, y = component, marker="x",
-               alpha=0.2, s = 2, c = "black")
+               alpha=0.2, s = 1, c = "black")
 
     ax.set_xlabel(f"{prettify_metric_name(metric)}")
     ax.set_ylabel(f"Component-{model_name[-1]}")
@@ -268,7 +268,7 @@ def component_vs_metric(metric_values, component, metric = nx.number_of_nodes, m
     ax.grid(False)
 
     plt.tight_layout()
-    plt.savefig(f"outputs/{model_name}-{prettify_metric_name(metric)}.png", dpi = 450)
+    plt.savefig(f"outputs/{model_name}-{prettify_metric_name(metric)}.png", dpi = 600)
     plt.close()
 
 def is_outlier(points, thresh=3):
@@ -332,7 +332,7 @@ def embeddings_hdbscan(loaders, embeddings, cluster_samples = 100):
         item.remove_edges_from(nx.selfloop_edges(item))
 
     metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               average_degree, nx.average_clustering, nx.transitivity]
+               average_degree, nx.average_clustering, nx.transitivity, average_degree]
 
     metric_arrays = [np.array([metric(g) for g in tqdm(val_data)]) for metric in metrics]
 
@@ -586,9 +586,9 @@ def run(args):
 
     #
     # # Visualise
-    for i, loader in enumerate(val_loaders):
-        vis_vals(loader, names[i], num = num)
-        vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
+    # for i, loader in enumerate(val_loaders):
+    #     vis_vals(loader, names[i], num = num)
+    #     vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
 
     # Get embeddings
     # general_ee = GeneralEmbeddingEvaluation()

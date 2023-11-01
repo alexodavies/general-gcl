@@ -29,6 +29,7 @@ from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from unsupervised.encoder import TransferModel
+from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression, LinearRegression
 
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 
@@ -135,19 +136,64 @@ def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
 def get_targets(loader):
     # Iterate over items in loaders and convert to nx graphs, while removing selfloops
     data= []
-    for loader in loader:
-        for batch in loader:
-            data += batch.to_data_list()
-    return [i_data.y.item() for i_data in data]
+    for batch in loader:
+        data += batch.to_data_list()
+    targets = []
+    for idata in data:
+        y = idata.y
+        if len(y.shape) > 1:
+            targets.append(y[0][0].item())
+        else:
+            targets.append(y.item())
+
+    return tidy_labels(targets)
 
 def get_datalist(loader):
     data= []
-    for loader in loader:
-        for batch in loader:
-            data += batch.to_data_list()
+    for batch in loader:
+        data += batch.to_data_list()
     return data
 
-def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n_epochs = 50):
+def python_index_to_latex(index: str):
+    index = index.replace('e', r'\times 10^{')
+    return index
+
+def reindex(number1, number2):
+    number_string1 = str('%.3g' % number1)
+    number_string2 = str('%.3g' % number2)
+    # number_string1 = python_index_to_latex('{:.2e}'.format(number_string1))
+    try:
+        num1_numerator, number_1_index = float(number_string1.split('e')[0]), int(number_string1.split('e')[1])
+    except:
+        num1_numerator = float(number_string1)
+        number_1_index = 0
+
+    try:
+        num2_numerator, number_2_index = float(number_string2.split('e')[0]), int(number_string2.split('e')[1])
+    except:
+        num2_numerator = float(number_string2)
+        number_2_index = 0
+    # eg index = -3, number_2_index = -5, index_difference = -2
+    index_difference = number_2_index - number_1_index
+    if index_difference < -5:
+        num2_numerator = 0
+    else:
+        num2_numerator = num2_numerator * (10**index_difference)
+    # number_string2 = f'{numerator}e{number_1_index}'
+
+    return num1_numerator, num2_numerator, number_1_index
+
+
+
+def floats_to_pm(value, error):
+    value, error, index = reindex(value, error)
+
+    string_out = f"$({value} \\pm {error}) \\times 10" + r'{' + f"{index}" + r'}$'
+
+    return string_out
+
+
+def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embeddings, test_embeddings, name = "blank"):
     # At the moment this is rigid to single-value predictions
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -158,6 +204,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
         os.mkdir(f"outputs/{model_name}")
 
     if task == "empty":
+        print(f"Skipping {model_name}")
         return
 
     if task == "classification":
@@ -173,12 +220,45 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
     model.to(device)
 
-    val_targets = get_targets()
+    val_targets = get_targets(val_loader)
 
+    shuffle_inds = np.arange(len(val_targets))
+    np.random.shuffle(shuffle_inds)
+    val_targets = np.array(val_targets)[shuffle_inds]
+    val_embeddings = val_embeddings[shuffle_inds, :]
 
+    test_targets = get_targets(test_loader)
 
+    num_val = val_targets.shape[0]
+    num_test = len(test_targets)
 
+    n_splits = 20
+    n_per_split = int(num_val / n_splits)
+    scores = []
+    for n_split in range(n_splits):
+        selection_indices = np.ones(num_val, dtype=bool)
 
+        selection_indices[n_split*n_per_split:(n_split+1)*n_per_split] = 0
+        split_targets = np.array(val_targets)[selection_indices]
+        split_embeddings = val_embeddings[selection_indices]
+
+        nan_indices = np.isnan(split_targets)
+        split_embeddings = split_embeddings[~nan_indices]
+        split_targets = split_targets[~nan_indices]
+
+        if task == "classification":
+            lin_model = LogisticRegression(dual=False, fit_intercept=True)
+        elif task == "regression":
+            lin_model = LinearRegression()  # Ridge(fit_intercept=True, copy_X=True)
+        # try:
+        # print(split_targets, task)
+        lin_model.fit(split_embeddings, split_targets)
+        pred = lin_model.predict(test_embeddings)
+        scores += [score_fn(test_targets, pred)]
+        # except:
+        #     pass
+
+    print(f"{model_name} & {name} &  {reindex(np.mean(scores), np.std(scores))} \\\\")
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -235,131 +315,76 @@ def run(args):
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
-    for i in range(len(val_loaders)):
-        val_loader = val_loaders[i]
-        test_loader = test_loaders[i]
-        name = names[i]
-        print(f"Name: {name}")
+    checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
+    # percentiles = [10., 10., 10., 0.5]
+    for i_ax, checkpoint in enumerate(checkpoints):
 
-        if name not in os.listdir("outputs"):
-            os.mkdir(f"outputs/{name}")
+        checkpoint = checkpoints[i_ax]
 
+        if checkpoint == "latest":
+            checkpoint_root = "wandb/latest-run/files"
+            checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+            print(checkpoints)
+            epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+            checkpoint_ind = np.argsort(epochs[::-1])[0]
 
+            checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
 
-        # try:
-        n_repeats = 10
-        num_epochs = 50
-        best_pretrain_score = 1.e07
-        best_untrain_score = 1.e07
+        elif checkpoint == "untrained":
+            checkpoint_path = "untrained"
 
-        pretrain_val = np.zeros((n_repeats, num_epochs))
-        untrain_val = np.zeros((n_repeats, num_epochs))
-        pretrain_scores, untrain_scores = [], []
+        else:
+            checkpoint_path = f"outputs/{checkpoint}"
+            cfg_name = checkpoint.split('.')[0] + ".yaml"
+            config_path = f"outputs/{cfg_name}"
 
-        pbar = tqdm(range(n_repeats))
-        for n in pbar:
-            model = TransferModel(
-                MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                                pooling_type=args.pooling_type),
-                proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
-            pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
-                                                                                                                                    checkpoint_path,
-                                                                                                                                    val_loader,
-                                                                                                                                    test_loader,
-                                                                                                                                    name = name,
-                                                                                                                                    n_epochs=num_epochs)
-            model = TransferModel(
-                MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                                pooling_type=args.pooling_type),
-                proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
-            untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
-                                                                                                                              "untrained",
-                                                                                                                              val_loader,
-                                                                                                                              test_loader,
-                                                                                                                              name = name,
-                                                                                                                              n_epochs=num_epochs)
+            with open(config_path, 'r') as stream:
+                try:
+                    # Converts yaml document to python object
+                    wandb_cfg = yaml.safe_load(stream)
 
-            pretrain_val[n, :] = pretrain_val_losses
-            untrain_val[n, :] = untrain_val_losses
+                    # Printing dictionary
+                    # print(wandb_cfg)
+                except yaml.YAMLError as e:
+                    # pass
+                    print(e)
 
-            scores = "Pretrain:" + str(pretrain_val_score)[:5] + "  Untrain:" + str(untrain_val_score)[:5]
-            pbar.set_description(scores)
+            args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
-            pretrain_scores.append(pretrain_val_score)
-            untrain_scores.append(untrain_val_score)
+        # Retrieved saved models and load weights
 
-            if pretrain_val_score <= best_pretrain_score:
-                best_pretrain_score = pretrain_val_score
-            if untrain_val_score <= best_untrain_score:
-                best_untrain_score = untrain_val_score
+        model = GInfoMinMax(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            proj_hidden_dim=args.emb_dim).to(device)
+
+        view_learner = ViewLearner(
+            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                            pooling_type=args.pooling_type),
+            mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
+
+        if checkpoint != "untrained":
+            model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+            model.load_state_dict(model_dict['encoder_state_dict'])
+            view_learner.load_state_dict(model_dict['view_state_dict'])
 
 
+        # Get embeddings
+        general_ee = GeneralEmbeddingEvaluation()
+        model.eval()
+        val_all_embeddings, val_separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders, node_features=evaluation_node_features)
+        test_all_embeddings, test_separate_embeddings = general_ee.get_embeddings(model.encoder, test_loaders, node_features=evaluation_node_features)
 
+        for i_embedding, embedding in enumerate(val_separate_embeddings):
+            val_loader = val_loaders[i_embedding]
+            test_loader = test_loaders[i_embedding]
+            test_embedding = test_separate_embeddings[i_embedding]
+            name = names[i_embedding]
+            linear_validation(model, checkpoint_path, val_loader, test_loader, embedding, test_embedding, name)
 
-        untrain_val_score = str(best_untrain_score)[:6]
-        pretrain_val_score = str(best_pretrain_score)[:6]
+            # def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embeddings, test_embeddings,
+            #                       name="blank"):
 
-        pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
-        untrain_val_loss_mean = np.mean(untrain_val, axis=0)
-
-        pretrain_val_loss_max = np.max(pretrain_val, axis=0)
-        untrain_val_loss_max = np.max(untrain_val, axis=0)
-
-        pretrain_val_loss_min = np.min(pretrain_val, axis=0)
-        untrain_val_loss_min = np.min(untrain_val, axis=0)
-
-        pretrain_mean_score = str(np.mean(pretrain_scores))[:5]
-        untrain_mean_score = str(np.mean(untrain_scores))[:5]
-
-        pretrain_dev_score = str(np.std(pretrain_scores))[:5]
-        untrain_dev_score = str(np.std(untrain_scores))[:5]
-
-
-
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_loss_max,
-                pretrain_val_loss_min,
-                alpha = 0.5,
-                color = "green")
-
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_loss_max,
-                untrain_val_loss_min,
-                alpha = 0.5,
-                color = "blue")
-
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_losses,
-                label=f"Pre-Trained ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
-                c = "green")
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_losses,
-                label=f"From Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
-                c = "blue")
-
-
-        # ax.axhline(pretrain_best_val_loss, c = "green", linestyle="dashed")
-        # ax.axhline(untrain_best_val_loss,  c = "blue", linestyle="dashed")
-
-        ax.legend(loc = "upper right", shadow=True)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Validation Loss")
-        ax.set_title(name)
-
-        # if max(pretrain_val_losses + untrain_val_losses) > 2000:
-        ax.set_yscale('log')
-
-        plt.tight_layout()
-
-        features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")
-        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")})
-        plt.close()
 
 
 
