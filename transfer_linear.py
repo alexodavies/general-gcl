@@ -24,7 +24,7 @@ from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
 
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
-from unsupervised.encoder import MoleculeEncoder
+from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
@@ -345,13 +345,13 @@ def run(args):
         # Retrieved saved models and load weights
 
         model = GInfoMinMax(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
+            Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                    pooling_type=args.pooling_type),
             proj_hidden_dim=args.emb_dim).to(device)
 
         view_learner = ViewLearner(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
+            Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                    pooling_type=args.pooling_type),
             mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
 
         if checkpoint != "untrained":

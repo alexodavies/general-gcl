@@ -49,7 +49,7 @@ from datasets.lattice_dataset import LatticeDataset
 
 
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
-from unsupervised.encoder import MoleculeEncoder
+from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner

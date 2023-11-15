@@ -68,7 +68,7 @@ def vis_from_pyg(data, filename = None, ax = None, save = True):
     """
     g, labels = better_to_nx(data)
     if ax is None:
-        fig, ax = plt.subplots(figsize = (6,6))
+        fig, ax = plt.subplots(figsize = (2,2))
         ax_was_none = True
     else:
         ax_was_none = False

@@ -48,7 +48,7 @@ from datasets.lattice_dataset import LatticeDataset
 
 
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
-from unsupervised.encoder import MoleculeEncoder
+from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
@@ -566,10 +566,10 @@ def run(args):
 
 
 
-    model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                    proj_hidden_dim=args.emb_dim).to(device)
+    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                        proj_hidden_dim=args.emb_dim).to(device)
 
-    view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+    view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                                mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
 
     if checkpoint != "untrained":
@@ -586,9 +586,9 @@ def run(args):
 
     #
     # # Visualise
-    # for i, loader in enumerate(val_loaders):
-    #     vis_vals(loader, names[i], num = num)
-    #     vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
+    for i, loader in enumerate(val_loaders):
+        vis_vals(loader, names[i], num = num)
+        vis_views(view_learner, loader, names[i], num=num, force_redo=redo_views)
 
     # Get embeddings
     # general_ee = GeneralEmbeddingEvaluation()
@@ -598,74 +598,76 @@ def run(args):
 
     # fig, ((ax1, ax2),(ax3, ax4)) = plt.subplots(nrows=2, ncols=2, figsize=(11,9))
     # axes = [ax1, ax2, ax3, ax4]
-    checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
-    metrics, metric_arrays, metric_names = get_metric_values(val_loaders)
-    # percentiles = [10., 10., 10., 0.5]
-    for i_ax, checkpoint in enumerate(checkpoints):
-
-        checkpoint = checkpoints[i_ax]
-
-        if checkpoint == "latest":
-            checkpoint_root = "wandb/latest-run/files"
-            checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-            print(checkpoints)
-            epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-            checkpoint_ind = np.argsort(epochs[::-1])[0]
-
-            checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
-
-        elif checkpoint == "untrained":
-            checkpoint_path = "untrained"
-
-        else:
-            checkpoint_path = f"outputs/{checkpoint}"
-            cfg_name = checkpoint.split('.')[0] + ".yaml"
-            config_path = f"outputs/{cfg_name}"
-
-            with open(config_path, 'r') as stream:
-                try:
-                    # Converts yaml document to python object
-                    wandb_cfg = yaml.safe_load(stream)
-
-                    # Printing dictionary
-                    # print(wandb_cfg)
-                except yaml.YAMLError as e:
-                    # pass
-                    print(e)
-
-            args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
-
-        # Retrieved saved models and load weights
-
-        model = GInfoMinMax(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
-            proj_hidden_dim=args.emb_dim).to(device)
-
-        view_learner = ViewLearner(
-            MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                            pooling_type=args.pooling_type),
-            mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-
-        if checkpoint != "untrained":
-            model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-            model.load_state_dict(model_dict['encoder_state_dict'])
-            view_learner.load_state_dict(model_dict['view_state_dict'])
-
-
-        # Get embeddings
-        general_ee = GeneralEmbeddingEvaluation()
-        model.eval()
-        all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
-
-        scaler = StandardScaler().fit(all_embeddings)
-        print(f"Scaler means: {scaler.mean_.shape}, vars: {scaler.var_.shape}")
-        all_embeddings = scaler.transform(all_embeddings)
-
-        print(f"All embeddings: {all_embeddings.shape}")
-
-        model_name = checkpoint_path.split("/")[-1].split(".")[0]
-        embeddings_vs_metrics(metrics, metric_arrays, metric_names, all_embeddings, n_components=5, model_name=model_name)
+    # checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
+    # metrics, metric_arrays, metric_names = get_metric_values(val_loaders)
+    # # percentiles = [10., 10., 10., 0.5]
+    # for i_ax, checkpoint in enumerate(checkpoints):
+    #
+    #     checkpoint = checkpoints[i_ax]
+    #
+    #     if checkpoint == "latest":
+    #         checkpoint_root = "wandb/latest-run/files"
+    #         checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+    #         print(checkpoints)
+    #         epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+    #         checkpoint_ind = np.argsort(epochs[::-1])[0]
+    #
+    #         checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    #
+    #     elif checkpoint == "untrained":
+    #         checkpoint_path = "untrained"
+    #
+    #     else:
+    #         checkpoint_path = f"outputs/{checkpoint}"
+    #         cfg_name = checkpoint.split('.')[0] + ".yaml"
+    #         config_path = f"outputs/{cfg_name}"
+    #
+    #         with open(config_path, 'r') as stream:
+    #             try:
+    #                 # Converts yaml document to python object
+    #                 wandb_cfg = yaml.safe_load(stream)
+    #
+    #                 # Printing dictionary
+    #                 # print(wandb_cfg)
+    #             except yaml.YAMLError as e:
+    #                 # pass
+    #                 print(e)
+    #
+    #         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+    #
+    #     # Retrieved saved models and load weights
+    #
+    #     model = GInfoMinMax(
+    #         Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+    #                         pooling_type=args.pooling_type),
+    #         proj_hidden_dim=args.emb_dim).to(device)
+    #
+    #     view_learner = ViewLearner(
+    #         Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+    #                         pooling_type=args.pooling_type),
+    #         mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
+    #
+    #     if checkpoint != "untrained":
+    #         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    #         model.load_state_dict(model_dict['encoder_state_dict'])
+    #         view_learner.load_state_dict(model_dict['view_state_dict'])
+    #
+    #
+    #     # Get embeddings
+    #     general_ee = GeneralEmbeddingEvaluation()
+    #     model.eval()
+    #     all_embeddings, separate_embeddings = general_ee.get_embeddings(model.encoder, val_loaders)
+    #
+    #     scaler = StandardScaler().fit(all_embeddings)
+    #     print(f"Scaler means: {scaler.mean_.shape}, vars: {scaler.var_.shape}")
+    #     all_embeddings = scaler.transform(all_embeddings)
+    #
+    #     print(f"All embeddings: {all_embeddings.shape}")
+    #
+    #     model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    #     embeddings_vs_metrics(metrics, metric_arrays, metric_names, all_embeddings, n_components=5, model_name=model_name)
+    #
+    #
     #
     #     scaler = StandardScaler().fit(all_embeddings)
     #     print(f"Scaler means: {scaler.mean_.shape}, vars: {scaler.var_.shape}")
@@ -720,13 +722,14 @@ def run(args):
 
     # embedder = ComponentSlicer(comp_1=10, comp_2=20)
     # embedder = Isomap(n_components=2, n_neighbors=250, n_jobs=6).fit(all_embeddings)
-    embedder = PCA(n_components=2).fit(all_embeddings)
+    # embedder = PCA(n_components=2).fit(all_embeddings)
 
-    proj_all = embedder.transform(all_embeddings)
+    # proj_all = embedder.transform(all_embeddings)
     # component_vs_metric(val_loaders, proj_all[:,0])
     # embedder = TruncatedSVD(n_components=10).fit(all_embeddings)
-    # embedder = UMAP(n_components=2, n_neighbors=50, n_jobs=6)
-    # embedder.fit(all_embeddings)
+    embedder = UMAP(n_components=3, n_neighbors=10, n_jobs=6)
+    embedder.fit(all_embeddings)
+    proj_all = embedder.transform(all_embeddings)
 
     #Prepare data for bokeh dashboard
     x, y, plot_names, plot_paths, view_paths  = [], [], [], [], []
@@ -793,6 +796,42 @@ def run(args):
                 aspect_ratio = 16/8, lod_factor = 10)
 
     unique_names = np.arange(len(names))
+
+    # from sklearn.manifold import TSNE
+    # embedder = TSNE(n_components=3, n_jobs=6)
+    # proj_all = embedder.fit_transform(all_embeddings)
+    # embedder.transform(all_embeddings)
+    df_floats, df_names, img_paths = [], [], []
+    for i in range(len(names)):
+        name = names[i]
+        df_names += separate_embeddings[i].shape[0] * [name]
+        df_floats += separate_embeddings[i].shape[0] * [i / len(names)]
+
+        img_root = os.getcwd() + '/original_datasets/' + name + '/vals/*.png'
+        these_img_paths = glob.glob(img_root)
+
+        filenames = [int(filename.split('/')[-1][4:-4]) for filename in these_img_paths]
+        sort_inds = np.argsort(filenames).tolist()
+        these_img_paths = [these_img_paths[ind] for ind in sort_inds]
+        img_paths += these_img_paths + ["None"] * (separate_embeddings[i].shape[0] - len(these_img_paths))
+
+    proj_all = proj_all / np.std(proj_all, axis = 0)
+
+    print({"x":proj_all[:, 0].shape,
+            "y":proj_all[:, 1].shape,
+            "z":proj_all[:, 2].shape,
+            "dataset_name":len(df_names),
+            "dataset_color":len(df_floats),
+            "img_paths":len(img_paths)})
+
+    embedding_dataframe = pd.DataFrame({"x":proj_all[:, 0],
+                                        "y":proj_all[:, 1],
+                                        "z":proj_all[:, 2],
+                                        "dataset_name":df_names,
+                                        "dataset_color":df_floats,
+                                        "img_paths":img_paths})
+
+    embedding_dataframe.to_csv("outputs/embeddings.csv")
 
     colors = [
         "#%02x%02x%02x" % (int(r), int(g), int(b)) for r, g, b, _ in 255 * mpl.cm.tab20(mpl.colors.Normalize()(unique_names))

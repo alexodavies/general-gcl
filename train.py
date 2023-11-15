@@ -18,7 +18,7 @@ from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 
 
 from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
-from unsupervised.encoder import MoleculeEncoder
+from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
@@ -167,12 +167,12 @@ def run(args):
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
-    model = GInfoMinMax(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                    proj_hidden_dim=args.emb_dim).to(device)
+    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                        proj_hidden_dim=args.emb_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
 
-    view_learner = ViewLearner(MoleculeEncoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+    view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                                mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
     view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 

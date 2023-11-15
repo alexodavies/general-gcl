@@ -649,3 +649,118 @@ class GeneralEmbeddingEvaluation():
 
 		wandb.log({"Mean Cosine Dataset Separation":mean_separation})
 	# plt.show()
+
+
+class NodeEmbeddingEvaluation():
+	def __init__(self):
+		self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+	def embedding_evaluation(self, encoder, train_loaders, val_loaders, names,
+							 use_wandb=True, node_features = False, not_in_training = False):
+
+		val_all_embeddings, val_separate_embeddings = self.get_embeddings(encoder, val_loaders, node_features=node_features)
+
+		if use_wandb and not not_in_training:
+			self.centroid_similarities(val_separate_embeddings, names)
+			self.vis(val_all_embeddings, val_separate_embeddings, names)
+
+		return val_all_embeddings, val_separate_embeddings
+
+	def get_embeddings(self, encoder, loaders, use_wandb=True, node_features = False):
+		encoder.eval()
+		all_embeddings = None
+		separate_embeddings = []
+		# colours = []
+		for i, loader in enumerate(tqdm(loaders, leave = False, desc = "Getting embeddings")):
+			train_emb, train_y = encoder.get_embeddings(loader, self.device, node_features = node_features)
+
+			separate_embeddings.append(train_emb)
+			if all_embeddings is None:
+				all_embeddings = train_emb
+			else:
+				all_embeddings = np.concatenate((all_embeddings, train_emb))
+			# colours += [i for n in range(train_emb.shape[0])]
+
+		return all_embeddings, separate_embeddings
+
+	def vis(self, all_embeddings, separate_embeddings, names):
+		# embedder = PCA(n_components=2).fit(embeddings)
+
+		# proj_train, proj_val, proj_test = embedder.transform(train_emb), embedder.transform(
+		# 	val_emb), embedder.transform(test_emb)
+
+		fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(18, 9))
+
+		embedder = UMAP(n_components=2, n_jobs=4).fit(all_embeddings)
+
+		for i, emb in enumerate(separate_embeddings):
+			proj = embedder.transform(emb)
+			ax1.scatter(proj[:, 0], proj[:, 1],
+					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
+					   label=f"{names[i]} - {proj.shape[0]} graphs")
+
+		ax1.legend(shadow=True)
+		ax1.set_title("UMAP Embedding")
+
+		embedder = PCA(n_components=2).fit(all_embeddings)
+
+
+		for i, emb in enumerate(separate_embeddings):
+			proj = embedder.transform(emb)
+			ax2.scatter(proj[:, 0], proj[:, 1],
+					   alpha= 1 - proj.shape[0] / all_embeddings.shape[0], s = 5,
+					   label=f"{names[i]} - {proj.shape[0]} graphs")
+
+
+		# mean_x, dev_x = np.mean(proj[:, 0]), np.std(proj[:, 0])
+		# mean_y, dev_y = np.mean(proj[:, 1]), np.std(proj[:, 1])
+
+
+
+		ax2.legend(shadow=True)
+		ax2.set_title("PCA Projection")
+
+		plt.savefig("outputs/embedding.png")
+		wandb.log({"Embedding": wandb.Image("outputs/embedding.png")})
+		plt.close()
+
+	def centroid_similarities(self, embeddings, names):
+		embed_dim = embeddings[0].shape[1]
+		centroids = np.zeros((len(embeddings), embed_dim))
+
+		for i, embedding in enumerate(embeddings):
+			centroids[i, :] = np.mean(embedding, axis = 0)
+
+		pairwise_similarities = cosine_similarity(centroids)
+		print(pairwise_similarities)
+
+		fig, ax = plt.subplots(figsize=(7,6))
+
+		im = ax.imshow(pairwise_similarities, cmap = "binary", vmin = -1, vmax = 1)
+
+		ax.set_xticks(np.arange(len(names)), labels = names)
+		ax.set_yticks(np.arange(len(names)), labels = names)
+
+		# for i1 in range(len(names)):
+		# 	for i2 in range(len(names)):
+		# 		text = ax.text(i2, i1, np.around(pairwise_similarities[i1, i2], decimals = 3),
+		# 					   ha="center", va="center", color="w")
+
+		annotate_heatmap(im, valfmt="{x:.3f}")
+
+		plt.savefig("outputs/pairwise-similarity.png")
+		wandb.log({"Pairwise Dataset Similarities": wandb.Image("outputs/pairwise-similarity.png")})
+
+
+		pairwise_sum = 0
+		for i1 in range(pairwise_similarities.shape[0]):
+			for i2 in range(pairwise_similarities.shape[1]):
+				if i2 <= i1:
+					pass
+				else:
+					pairwise_sum += pairwise_similarities[i1, i2]
+
+		mean_separation = pairwise_sum / ((pairwise_similarities.shape[0]**2)/2 - pairwise_similarities.shape[0])
+
+		wandb.log({"Mean Cosine Dataset Separation":mean_separation})
+	# plt.show()
