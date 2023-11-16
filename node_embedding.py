@@ -142,7 +142,11 @@ def tidy_return(g, function = nx.degree):
     result = []
     nx.convert_node_labels_to_integers(g)
     for n in range(g.order()):
-        result.append(function(g, nbunch = n)[0])
+        # try:
+        print(g.nodes, n)
+        result.append(function(g, nbunch = n))
+        # except:
+        #     result.append(-1000)
     return result
 
 def prettify_metric_name(metric):
@@ -161,7 +165,8 @@ def prettify_metric_name(metric):
     #                "transitivity": "Transitivity",
     #                "three_cycles": "Num. 3-Cycles",
     #                "four_cycles":"Num. 4-Cycles"}
-    pretty_dict = {"degree":"Degree"}
+    pretty_dict = {"degree":"Degree",
+                   "clustering":"Clustering"}
 
 
     return pretty_dict[metric_name]
@@ -187,12 +192,13 @@ def get_metric_values(loaders):
         val_data[i] = clean_graph(item)
 
     # Metrics can be added here - should take an nx graph as input and return a numerical value
-    metrics = [nx.degree] #, average_degree, ]
+    metrics = [nx.degree, nx.clustering] #, average_degree, ]
 
 
     metric_names = [prettify_metric_name(metric) for metric in metrics]
     # Compute metrics for all graphs
-    metric_arrays = [np.array(sum([metric(g) for g in tqdm(val_data, leave=False, desc=metric_names[i_metric])], [])) for i_metric, metric in enumerate(metrics)]
+
+    metric_arrays = [np.array(sum((tidy_return(g, function=metric) for g in tqdm(val_data, leave=False, desc=metric_names[i_metric])), [])) for i_metric, metric in enumerate(metrics)]
 
     return metrics, metric_arrays, metric_names
 

@@ -168,7 +168,7 @@ def run(args):
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
     model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                        proj_hidden_dim=args.emb_dim).to(device)
+                        proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
 
@@ -223,10 +223,10 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
-        if epoch % 2 == 0:
-            model.eval()
-            total_val = 0.
-            total_train = 0.
+        if epoch % 10 == 0:
+            # model.eval()
+            # total_val = 0.
+            # total_train = 0.
             # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
             # for ee in evaluators:
             # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
@@ -251,12 +251,12 @@ def run(args):
                 'encoder_optimizer_state_dict': model_optimizer.state_dict(),
                 'view_state_dict': view_learner.state_dict(),
                 'view_optimizer_state_dict': view_optimizer.state_dict()},
-                f"{wandb.run.dir}/Checkpoint-{epoch}-{np.random.randint(0,10)}.pt")
+                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}")
 
     # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
     #                                                              test_loader, vis = True)
-    if epoch % 5 == 0:
-        general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
+    # if epoch % 5 == 0:
+    #     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
 
     # if 'classification' in dataset.task_type:
     #     best_val_epoch = np.argmax(np.array(valid_curve))
@@ -287,17 +287,21 @@ def arg_parse():
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
+
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
+    parser.add_argument('--proj_dim', type=int, default=300,
+                        help='projection head dimension')
+
     parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
                         help='embedding dimension')
     parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=1024,
+    parser.add_argument('--epochs', type=int, default=100,
                         help='Train Epochs')
-    parser.add_argument('--reg_lambda', type=float, default=6.0, help='View Learner Edge Perturb Regularization Strength')
+    parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
     # parser.add_argument('--node-features', help="Whether to include node features in evaluation", action=argparse.BooleanOptionalAction)
 
