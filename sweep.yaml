@@ -1,8 +1,7 @@
 program: train.py
 method: grid
 parameters:
-  emb_dim:
-    distribution: {'values':[1,5,10,50,100,200,300,500,700,1000]}
+  emb_dim: {'values':[1,2,5,10,50,100,300,600,1000]}
 command:
   /usr/bin/env python train.py --node-features
 

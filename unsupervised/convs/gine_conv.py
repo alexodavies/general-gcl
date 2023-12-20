@@ -52,7 +52,5 @@ class GINEConv(MessagePassing):
     def message(self, x_j: Tensor, edge_attr: Tensor, edge_weight) -> Tensor:
         return F.relu(x_j + edge_attr) if edge_weight is None else F.relu(x_j + edge_attr) * edge_weight.view(-1, 1)
 
-
-
     def __repr__(self):
         return '{}(nn={})'.format(self.__class__.__name__, self.nn)

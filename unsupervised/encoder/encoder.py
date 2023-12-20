@@ -5,11 +5,14 @@ from ogb.graphproppred.mol_encoder import AtomEncoder, BondEncoder
 from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import global_add_pool
 
-from unsupervised.convs import GINEConv
+from unsupervised.convs import GINEConv, SAGEConv
+from torch_geometric.nn import GATv2Conv
 
 
 class Encoder(torch.nn.Module):
-	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0, pooling_type="standard", is_infograph=False):
+	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
+				 pooling_type="standard", is_infograph=False,
+				 convolution = GINEConv, edge_dim = 1):
 		super(Encoder, self).__init__()
 
 		self.pooling_type = pooling_type
@@ -31,13 +34,25 @@ class Encoder(torch.nn.Module):
 
 		self.atom_encoder = AtomEncoder(emb_dim)
 		self.bond_encoder = BondEncoder(emb_dim)
+		self.convolution = convolution
 
-		for i in range(num_gc_layers):
-			nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
-			conv = GINEConv(nn)
-			bn = torch.nn.BatchNorm1d(emb_dim)
-			self.convs.append(conv)
-			self.bns.append(bn)
+		if convolution != GATv2Conv:
+
+			for i in range(num_gc_layers):
+				nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
+				conv = convolution(nn)
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.convs.append(conv)
+				self.bns.append(bn)
+		else:
+
+			for i in range(num_gc_layers):
+				conv = convolution(in_channels=emb_dim,
+								   out_channels=emb_dim,
+								   edge_dim=edge_dim)
+				self.convs.append(conv)
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.bns.append(bn)
 
 		self.init_emb()
 
@@ -52,9 +67,29 @@ class Encoder(torch.nn.Module):
 		x = self.atom_encoder(x.to(torch.int))
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN
+
+
+		# GINConv works with
+		# 0
+		#
+		# x: torch.Size([24576, 300])
+		# edge_index: torch.Size([2, 342664])
+		# edge_attr: torch.Size([342664, 300])
+
 		xs = []
 		for i in range(self.num_gc_layers):
+			# if self.convolution != GATv2Conv:
+			# print("\n", i)
+			# print(x.shape)
+			# print(edge_index.shape)
+			# print(edge_attr.shape)
+
+			if edge_weight is None:
+				edge_weight = torch.ones((edge_index.shape[1], 1))
+			# print(edge_weight.shape)
 			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			# else:
+			# 	x = self.convs[i](x, edge_index)
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer
@@ -120,7 +155,8 @@ class Encoder(torch.nn.Module):
 		return ret, y
 
 class NodeEncoder(torch.nn.Module):
-	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0, pooling_type="standard", is_infograph=False):
+	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
+				 pooling_type="standard", is_infograph=False, convolution = GINEConv):
 		super(NodeEncoder, self).__init__()
 
 		self.pooling_type = pooling_type
@@ -143,12 +179,23 @@ class NodeEncoder(torch.nn.Module):
 		self.atom_encoder = AtomEncoder(emb_dim)
 		self.bond_encoder = BondEncoder(emb_dim)
 
-		for i in range(num_gc_layers):
-			nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
-			conv = GINEConv(nn)
-			bn = torch.nn.BatchNorm1d(emb_dim)
-			self.convs.append(conv)
-			self.bns.append(bn)
+		if convolution != GATv2Conv:
+
+			for i in range(num_gc_layers):
+				nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
+				conv = convolution(nn)
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.convs.append(conv)
+				self.bns.append(bn)
+		else:
+
+			for i in range(num_gc_layers):
+				conv = convolution(in_channels=self.emb_dim,
+								   out_channels=self.out_node_dim,
+								   heads = 1)
+				self.convs.append(conv)
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.bns.append(bn)
 
 		self.init_emb()
 

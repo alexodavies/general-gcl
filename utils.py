@@ -101,6 +101,52 @@ def vis_from_pyg(data, filename = None, ax = None, save = True):
 
     plt.close()
 
+def lowres_vis_from_pyg(data, filename = None, ax = None, save = True):
+    """
+    Visualise a pytorch_geometric.data.Data object
+    Args:
+        data: pytorch_geometric.data.Data object
+        filename: if passed, this is the filename for the saved image. Ignored if ax is not None
+        ax: matplotlib axis object, which is returned if passed
+
+    Returns:
+
+    """
+    g, labels = better_to_nx(data)
+    if ax is None:
+        fig, ax = plt.subplots(figsize = (2,2))
+        ax_was_none = True
+    else:
+        ax_was_none = False
+
+    if "ogbg" not in filename:
+        pos = nx.kamada_kawai_layout(g)
+
+        nx.draw_networkx_edges(g, pos = pos, ax = ax)
+        if np.unique(labels).shape[0] != 1:
+            nx.draw_networkx_nodes(g, pos=pos, node_color=labels,
+                                   edgecolors="black",
+                                   cmap="Dark2", node_size=64,
+                                   vmin=0, vmax=10, ax=ax)
+    else:
+        im = vis_molecule(nx_to_rdkit(g, labels))
+        ax.imshow(im)
+
+    ax.axis('off')
+    # ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
+
+    plt.tight_layout()
+
+    if not ax_was_none:
+        return ax
+    elif filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename, dpi = 50)
+        plt.close()
+
+    plt.close()
+
 
 
 def vis_grid(datalist, filename):
