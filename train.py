@@ -76,8 +76,7 @@ def train_epoch_random_edges(dataloader,
         reg_all: regularization loss for epoch
     """
 
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     for batch in tqdm(dataloader, leave = False):
         # set up
         batch = batch.to(device)
@@ -125,8 +124,7 @@ def train_epoch_adgcl(dataloader,
         reg_all: regularization loss for epoch
     """
 
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     for batch in tqdm(dataloader, leave = False):
         # set up
         batch = batch.to(device)
@@ -207,8 +205,7 @@ def train_epoch_adgcl(dataloader,
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = "cpu"
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
