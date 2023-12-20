@@ -37,11 +37,74 @@ def setup_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+def cl_loss(x1, x2):
+    T = 0.5
+    batch_size, _ = x1.size()
 
-def train_epoch(dataloader,
-                model, model_optimizer,
-                view_learner, view_optimizer,
-                model_loss_all, view_loss_all, reg_all):
+    x1_abs = x1.norm(dim=1)
+    x2_abs = x2.norm(dim=1)
+
+    sim_matrix = torch.einsum('ik,jk->ij', x1, x2) / torch.einsum('i,j->ij', x1_abs, x2_abs)
+    sim_matrix = torch.exp(sim_matrix / T)
+    pos_sim = sim_matrix[range(batch_size), range(batch_size)]
+    loss = pos_sim / (sim_matrix.sum(dim=1) - pos_sim)
+    loss = - torch.log(loss).mean()
+    return loss
+
+
+def train_epoch_random_edges(dataloader,
+                      model, model_optimizer,
+                      model_loss_all,
+                      drop_proportion = 0.2):
+    """
+    single train epoch for encoder and view learner
+
+
+    Args:
+        dataloader: dataloader (see get_train_loader)
+        model: encoder
+        model_optimizer: optimizer for model
+        view_learner: view learner
+        view_optimizer: optimizer for view learner
+        model_loss_all: stores losses for each batch
+        view_loss_all: stores view losses for each batch
+        reg_all: stores regularization losses for each batch
+
+    Returns:
+        model_loss_all: loss for epoch
+        view_loss_all: view loss for epoch
+        reg_all: regularization loss for epoch
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    for batch in tqdm(dataloader, leave = False):
+        # set up
+        batch = batch.to(device)
+        # # train (model) to minimize contrastive loss
+        model.train()
+        # view_learner.eval()
+        model.zero_grad()
+
+        edge_weights_1 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1]))
+        edge_weights_2 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1]))
+
+        x_aug_1, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_1)
+        x_aug_2, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_2)
+
+        # model_loss = cl_loss(x_aug_1, x_aug_2) #
+        model_loss = model.calc_loss(x_aug_1, x_aug_2)
+        model_loss_all += model_loss.item() * batch.num_graphs
+
+        # standard gradient descent formulation
+        model_loss.backward()
+        model_optimizer.step()
+
+    return model_loss_all, None, None
+
+def train_epoch_adgcl(dataloader,
+                      model, model_optimizer,
+                      view_learner, view_optimizer,
+                      model_loss_all, view_loss_all, reg_all):
     """
     single train epoch for encoder and view learner
 
@@ -120,7 +183,7 @@ def train_epoch(dataloader,
 
         x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
         edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
-
+        print(f"edge logits shape: {edge_logits.shape}, size {edge_logits.size()}")
         temperature = 1.0
         bias = 0.0 + 0.0001  # If bias is 0, we run into problems
         eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
@@ -151,16 +214,19 @@ def run(args):
     if "original_datasets" not in os.listdir():
         os.mkdir("original_datasets")
 
+    random_dropping = args.random_views
+    drop_proportion = args.dropped
+
     evaluation_node_features = args.node_features
     molecules = not args.no_molecules
     socials = not args.no_socials
     print(f"Chemicals: {molecules}, Socials: {socials}")
 
-    evaluator = Evaluator(name=args.dataset)
     my_transforms = Compose([initialize_edge_weight])
 
     dataset_subset = ["chemical" if molecules else "dummy",
                       "social" if socials else "dummy"]
+
     print(f"Passing subset: {dataset_subset}")
     dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset)
 
@@ -171,31 +237,21 @@ def run(args):
                         proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
-
-    view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
-                               mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
-    view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
+    if not random_dropping:
+        view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                                   mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
+        view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
 
     general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
-    # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-    # for ee in evaluators:
-    # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader, test_loader)
+
     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
-    # logging.info(
-    #     "Before training Embedding Eval Scores: Train: {} Val: {} Test: {}".format(train_score, val_score,
-    #                                                                                      test_score))
 
     model_losses = []
     view_losses = []
     view_regs = []
-    valid_curve = []
-    test_curve = []
-    train_curve = []
-
-    best_val = 1.0e4
 
     for epoch in tqdm(range(1, args.epochs + 1)):
         fin_model_loss = 0.
@@ -206,10 +262,17 @@ def run(args):
         view_loss_all = 0
         reg_all = 0
 
-        model_loss_all, view_loss_all, reg_all = train_epoch(dataloader,
-                    model, model_optimizer,
-                    view_learner, view_optimizer,
-                    model_loss_all, view_loss_all, reg_all)
+
+        if not random_dropping:
+            model_loss_all, view_loss_all, reg_all = train_epoch_adgcl(dataloader,
+                                                                       model, model_optimizer,
+                                                                       view_learner, view_optimizer,
+                                                                       model_loss_all, view_loss_all, reg_all)
+        else:
+            model_loss_all, view_loss_all, reg_all = train_epoch_random_edges(dataloader,
+                                                                       model, model_optimizer,
+                                                                       model_loss_all,
+                                                                       drop_proportion=drop_proportion)
 
         fin_model_loss += model_loss_all / len(dataloader)
         fin_view_loss += view_loss_all / len(dataloader)
@@ -224,54 +287,17 @@ def run(args):
                    "Reg Loss": fin_reg})
 
         if epoch % 10 == 0:
-            # model.eval()
-            # total_val = 0.
-            # total_train = 0.
-            # general_ee.embedding_evaluation(model.encoder, val_loaders, names)
-            # for ee in evaluators:
-            # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-            #                                                              test_loader, vis=True)
-            general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
-            # total_val += val_score
-            # total_train += train_score
 
+            if args.proj_dim != 1:
+                general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
 
-            # wandb.log({"Train Score": total_train,
-            #            "Val Score": total_val})
-
-            # train_curve.append(train_score)
-            # valid_curve.append(val_score)
-            # test_curve.append(test_score)
-
-            # if total_val <= best_val:
-            #     best_val = val_score
             torch.save({
                 'epoch': epoch,
                 'encoder_state_dict': model.state_dict(),
                 'encoder_optimizer_state_dict': model_optimizer.state_dict(),
-                'view_state_dict': view_learner.state_dict(),
-                'view_optimizer_state_dict': view_optimizer.state_dict()},
-                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}")
-
-    # train_score, val_score, test_score = ee.embedding_evaluation(model.encoder, train_loader, valid_loader,
-    #                                                              test_loader, vis = True)
-    # if epoch % 5 == 0:
-    #     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
-
-    # if 'classification' in dataset.task_type:
-    #     best_val_epoch = np.argmax(np.array(valid_curve))
-    #     best_train = max(train_curve)
-    # else:
-    #     best_val_epoch = np.argmin(np.array(valid_curve))
-    #     best_train = min(train_curve)
-    #
-    # logging.info('FinishedTraining!')
-    # logging.info('BestEpoch: {}'.format(best_val_epoch))
-    # logging.info('BestTrainScore: {}'.format(best_train))
-    # logging.info('BestValidationScore: {}'.format(valid_curve[best_val_epoch]))
-    # logging.info('FinalTestScore: {}'.format(test_curve[best_val_epoch]))
-
-    # return valid_curve[best_val_epoch], test_curve[best_val_epoch]
+                'view_state_dict': None if random_dropping else view_learner.state_dict(),
+                'view_optimizer_state_dict': None if random_dropping else view_optimizer.state_dict()},
+                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}")
 
 
 def arg_parse():
@@ -327,6 +353,18 @@ def arg_parse():
         help='Whether to include social (ie all other) graphs in training data',
     )
 
+    parser.add_argument(
+        '-r',
+        '--random-views',
+        action='store_true',
+        help='Whether to use random edge dropping',
+    )
+
+    parser.add_argument(
+        '--dropped', type=float, default=0.2,
+        help='Proportion of edges dropped during random edge dropping',
+    )
+
     parser.add_argument('--seed', type=int, default=0)
 
     return parser.parse_args()
@@ -335,6 +373,6 @@ def arg_parse():
 if __name__ == '__main__':
 
     args = arg_parse()
-    args = setup_wandb(args)
+    args = setup_wandb(args, offline=True)
     run(args)
 
