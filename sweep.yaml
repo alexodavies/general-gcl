@@ -1,5 +1,6 @@
 program: train.py
-method: bayes
+method: random
+project: general-gcl-random-dropping-sweep
 parameters:
   dropped:
     distribution: uniform
