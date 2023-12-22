@@ -142,8 +142,8 @@ def train_epoch_random_nodes(dataloader,
         mask_2 = mask_2.to(batch.x.dtype).to(device)
 
 
-        x_aug_1, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, mask_1)
-        x_aug_2, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, mask_2)
+        x_aug_1, _ = model(batch.batch.to(device), batch.x.to(device), batch.edge_index.to(device), batch.edge_attr.to(device), mask_1.to(device))
+        x_aug_2, _ = model(batch.batch.to(device), batch.x.to(device), batch.edge_index.to(device), batch.edge_attr.to(device), mask_2.to(device))
 
         model_loss = cl_loss(x_aug_1, x_aug_2) #
         # model_loss = model.calc_loss(x_aug_1, x_aug_2)

@@ -266,7 +266,7 @@ class NodeEncoder(torch.nn.Module):
 
 				if x is None:
 					x = torch.ones((batch.shape[0], 1)).to(device)
-				xpool, x = self.forward(batch, x, edge_index, edge_attr, edge_weight)
+				xpool, x = self.forward(batch.to(device), x.to(device), edge_index.to(device), edge_attr.to(device), edge_weight.to(device))
 
 				ret.append(x.cpu().numpy())
 				# print(x.shape)
