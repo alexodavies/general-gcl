@@ -11,6 +11,6 @@ command:
   - python
   - ${program}
   - ${args}
-  - -re
+  - -rn
 #  /usr/bin/env python train.py --node-features --epochs 10
 

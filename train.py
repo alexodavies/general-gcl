@@ -79,8 +79,8 @@ def train_epoch_random_edges(dataloader,
         # view_learner.eval()
         model.zero_grad()
 
-        edge_weights_1 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1]))
-        edge_weights_2 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1]))
+        edge_weights_1 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1])).to(device)
+        edge_weights_2 = torch.bernoulli((1 - drop_proportion) * torch.ones(batch.edge_index.shape[1])).to(device)
 
         x_aug_1, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_1)
         x_aug_2, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_2)
@@ -93,7 +93,7 @@ def train_epoch_random_edges(dataloader,
         model_loss.backward()
         model_optimizer.step()
 
-    return model_loss_all, None, None
+    return model_loss_all, -1., -1.
 
 
 
@@ -153,7 +153,7 @@ def train_epoch_random_nodes(dataloader,
         model_loss.backward()
         model_optimizer.step()
 
-    return model_loss_all, None, None
+    return model_loss_all, -1., -1.
 
 def train_epoch_adgcl(dataloader,
                       model, model_optimizer,

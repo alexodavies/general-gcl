@@ -210,7 +210,7 @@ def setup_wandb(cfg, offline = False):
     """
 
     kwargs = {'name': 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl', 'config': cfg,
-              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'offline' if offline else 'online'}
+              'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion', 'mode':'online' if offline else 'online'}
     wandb.init(**kwargs)
     wandb.save('*.txt')
 
