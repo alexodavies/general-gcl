@@ -1,11 +1,11 @@
 program: train.py
 method: random
-project: general-gcl-random-dropping-sweep
+project: general-gcl-random-edge-dropping-sweep
 parameters:
   dropped:
     distribution: uniform
     min: 0
     max: 1
 command:
-  /usr/bin/env python train.py --node-features -r
+  /usr/bin/env python train.py --node-features -re --epochs 10
 

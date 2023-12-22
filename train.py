@@ -57,23 +57,17 @@ def train_epoch_random_edges(dataloader,
                       model_loss_all,
                       drop_proportion = 0.2):
     """
-    single train epoch for encoder and view learner
-
-
+    single train epoch for encoder with random edge dropping as augmentation
     Args:
         dataloader: dataloader (see get_train_loader)
         model: encoder
         model_optimizer: optimizer for model
-        view_learner: view learner
-        view_optimizer: optimizer for view learner
         model_loss_all: stores losses for each batch
-        view_loss_all: stores view losses for each batch
-        reg_all: stores regularization losses for each batch
 
     Returns:
         model_loss_all: loss for epoch
-        view_loss_all: view loss for epoch
-        reg_all: regularization loss for epoch
+        view_loss_all: None - placeholder for code consistency with AD-GCL
+        reg_all: None - placeholder for code consistency with AD-GCL
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -91,8 +85,68 @@ def train_epoch_random_edges(dataloader,
         x_aug_1, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_1)
         x_aug_2, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, edge_weights_2)
 
-        # model_loss = cl_loss(x_aug_1, x_aug_2) #
-        model_loss = model.calc_loss(x_aug_1, x_aug_2)
+        model_loss = cl_loss(x_aug_1, x_aug_2) #
+        # model_loss = model.calc_loss(x_aug_1, x_aug_2)
+        model_loss_all += model_loss.item() * batch.num_graphs
+
+        # standard gradient descent formulation
+        model_loss.backward()
+        model_optimizer.step()
+
+    return model_loss_all, None, None
+
+
+
+def train_epoch_random_nodes(dataloader,
+                      model, model_optimizer,
+                      model_loss_all,
+                      drop_proportion = 0.2):
+    """
+    single train epoch for encoder with random node dropping as augmentation
+    Args:
+        dataloader: dataloader (see get_train_loader)
+        model: encoder
+        model_optimizer: optimizer for model
+        model_loss_all: stores losses for each batch
+
+    Returns:
+        model_loss_all: loss for epoch
+        view_loss_all: None - placeholder for code consistency with AD-GCL
+        reg_all: None - placeholder for code consistency with AD-GCL
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    for batch in tqdm(dataloader, leave = False):
+        # set up
+        batch = batch.to(device)
+        # # train (model) to minimize contrastive loss
+        model.train()
+        # view_learner.eval()
+        model.zero_grad()
+
+
+        nodes_dropped_1 = torch.bernoulli(drop_proportion * torch.ones(batch.x.shape[0])).to(bool).to(device)
+        nodes_dropped_2 = torch.bernoulli(drop_proportion * torch.ones(batch.x.shape[0])).to(bool).to(device)
+
+        mask_1 = torch.ones(batch.edge_index.shape[1], dtype=bool).to(device)
+        mask_2 = torch.ones(batch.edge_index.shape[1], dtype=bool).to(device)
+
+        # Find edges connected to dropped nodes and update the mask
+        edges_dropped_1 = torch.any(batch.edge_index == torch.nonzero(nodes_dropped_1).unsqueeze(1), dim=0).any(dim=0).to(device)
+        edges_dropped_2 = torch.any(batch.edge_index == torch.nonzero(nodes_dropped_2).unsqueeze(1), dim=0).any(dim=0).to(device)
+
+        mask_1[edges_dropped_1] = False
+        mask_2[edges_dropped_2] = False
+
+        mask_1 = mask_1.to(batch.x.dtype).to(device)
+        mask_2 = mask_2.to(batch.x.dtype).to(device)
+
+
+        x_aug_1, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, mask_1)
+        x_aug_2, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, mask_2)
+
+        model_loss = cl_loss(x_aug_1, x_aug_2) #
+        # model_loss = model.calc_loss(x_aug_1, x_aug_2)
         model_loss_all += model_loss.item() * batch.num_graphs
 
         # standard gradient descent formulation
@@ -214,7 +268,10 @@ def run(args):
     if "original_datasets" not in os.listdir():
         os.mkdir("original_datasets")
 
-    random_dropping = args.random_views
+    random_node_dropping = args.random_node_views
+    random_edge_dropping = args.random_edge_views
+
+    random_dropping = True if random_edge_dropping or random_node_dropping else False
     drop_proportion = args.dropped
 
     evaluation_node_features = args.node_features
@@ -269,10 +326,16 @@ def run(args):
                                                                        view_learner, view_optimizer,
                                                                        model_loss_all, view_loss_all, reg_all)
         else:
-            model_loss_all, view_loss_all, reg_all = train_epoch_random_edges(dataloader,
-                                                                       model, model_optimizer,
-                                                                       model_loss_all,
-                                                                       drop_proportion=drop_proportion)
+            if random_edge_dropping:
+                model_loss_all, view_loss_all, reg_all = train_epoch_random_edges(dataloader,
+                                                                           model, model_optimizer,
+                                                                           model_loss_all,
+                                                                           drop_proportion=drop_proportion)
+            elif random_node_dropping:
+                model_loss_all, view_loss_all, reg_all = train_epoch_random_nodes(dataloader,
+                                                                           model, model_optimizer,
+                                                                           model_loss_all,
+                                                                           drop_proportion=drop_proportion)
 
         fin_model_loss += model_loss_all / len(dataloader)
         fin_view_loss += view_loss_all / len(dataloader)
@@ -354,10 +417,17 @@ def arg_parse():
     )
 
     parser.add_argument(
-        '-r',
-        '--random-views',
+        '-re',
+        '--random-edge-views',
         action='store_true',
         help='Whether to use random edge dropping',
+    )
+
+    parser.add_argument(
+        '-rn',
+        '--random-node-views',
+        action='store_true',
+        help='Whether to use random node dropping',
     )
 
     parser.add_argument(
