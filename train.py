@@ -418,15 +418,15 @@ def arg_parse():
     )
 
     parser.add_argument(
-        # '--re',
-        '--random_edge_views',
+        '--re',
+        '--random-edge-views',
         action='store_true',
         help='Whether to use random edge dropping',
     )
 
     parser.add_argument(
-        # '-rn',
-        '--random_node_views',
+        '-rn',
+        '--random-node-views',
         action='store_true',
         help='Whether to use random node dropping',
     )

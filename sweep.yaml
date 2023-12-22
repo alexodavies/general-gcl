@@ -9,5 +9,10 @@ parameters:
   random_node_views:
     value: true
 command:
-  /usr/bin/env python train.py --node-features --epochs 10
+  - ${env}
+  - python
+  - ${program}
+  - ${args}
+  - -re
+#  /usr/bin/env python train.py --node-features --epochs 10
 
