@@ -237,7 +237,6 @@ def train_epoch_adgcl(dataloader,
 
         x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
         edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
-        print(f"edge logits shape: {edge_logits.shape}, size {edge_logits.size()}")
         temperature = 1.0
         bias = 0.0 + 0.0001  # If bias is 0, we run into problems
         eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
@@ -327,11 +326,13 @@ def run(args):
                                                                        model_loss_all, view_loss_all, reg_all)
         else:
             if random_edge_dropping:
+                print(f"\n\nUSING RANDOM EDGE DROPPING\n\n")
                 model_loss_all, view_loss_all, reg_all = train_epoch_random_edges(dataloader,
                                                                            model, model_optimizer,
                                                                            model_loss_all,
                                                                            drop_proportion=drop_proportion)
             elif random_node_dropping:
+                print(f"\n\nUSING RANDOM NODE DROPPING\n\n")
                 model_loss_all, view_loss_all, reg_all = train_epoch_random_nodes(dataloader,
                                                                            model, model_optimizer,
                                                                            model_loss_all,
@@ -388,7 +389,7 @@ def arg_parse():
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
