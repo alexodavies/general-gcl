@@ -418,7 +418,7 @@ def arg_parse():
     )
 
     parser.add_argument(
-        '--re',
+        '-re',
         '--random-edge-views',
         action='store_true',
         help='Whether to use random edge dropping',
