@@ -120,6 +120,8 @@ class Encoder(torch.nn.Module):
 					x = torch.ones((batch.shape[0], 1)).to(device)
 				x, _ = self.forward(batch, x, edge_index, edge_attr, edge_weight)
 
+				ret.append(x.cpu().numpy())
+
 				try:
 					if is_rand_label:
 						y.append(data.rand_label.cpu().numpy())
