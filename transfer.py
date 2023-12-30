@@ -220,7 +220,7 @@ def run(args):
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
-    wandb.log({"Transfer":True})
+
     # setup_seed(args.seed)
 
     num = args.num
@@ -262,7 +262,9 @@ def run(args):
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    wandb.log({"Model Name": model_name})
+    setup_wandb(args, name = model_name)
+    wandb.log({"Transfer":True})
+    wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else None})
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
@@ -280,7 +282,7 @@ def run(args):
         if name not in os.listdir("outputs"):
             os.mkdir(f"outputs/{name}")
 
-        if name not in ["ogbg-molesol", "facebook_large", "twitch_egos"]:
+        if name in ["ogbg-molpcba"]:
             continue
 
         n_repeats = 10
@@ -383,8 +385,8 @@ def run(args):
         plt.tight_layout()
 
         features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-250-epochs.png")
-        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-250-epochs.png")})
+        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")
+        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}.png")})
         plt.close()
 
 
@@ -438,6 +440,5 @@ def arg_parse():
 
 if __name__ == '__main__':
     args = arg_parse()
-    setup_wandb(args)
     run(args)
 

@@ -71,7 +71,7 @@ class Encoder(torch.nn.Module):
 		for i in range(self.num_gc_layers):
 
 			if edge_weight is None:
-				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.get_device())
+				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
 			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
 			x = self.bns[i](x)
