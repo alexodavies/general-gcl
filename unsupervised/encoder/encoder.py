@@ -67,29 +67,13 @@ class Encoder(torch.nn.Module):
 		x = self.atom_encoder(x.to(torch.int))
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN
-
-
-		# GINConv works with
-		# 0
-		#
-		# x: torch.Size([24576, 300])
-		# edge_index: torch.Size([2, 342664])
-		# edge_attr: torch.Size([342664, 300])
-
 		xs = []
 		for i in range(self.num_gc_layers):
-			# if self.convolution != GATv2Conv:
-			# print("\n", i)
-			# print(x.shape)
-			# print(edge_index.shape)
-			# print(edge_attr.shape)
 
 			if edge_weight is None:
-				edge_weight = torch.ones((edge_index.shape[1], 1))
-			# print(edge_weight.shape)
+				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.get_device())
+
 			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
-			# else:
-			# 	x = self.convs[i](x, edge_index)
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer
@@ -123,16 +107,12 @@ class Encoder(torch.nn.Module):
 
 				if isinstance(data, list):
 					data = data[0].to(device)
-				# elif isinstance(data, tuple):
-				# 	data = data[1].to(device)
 
 				data = data.to(device)
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
 
 				if not node_features:
 					x = torch.ones_like(x)
-
-				# print(edge_index.max(), x.shape)
 
 				edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
 
@@ -141,8 +121,7 @@ class Encoder(torch.nn.Module):
 				x, _ = self.forward(batch, x, edge_index, edge_attr, edge_weight)
 
 				ret.append(x.cpu().numpy())
-				# print(x.shape)
-				# print(data.y, data.y.shape)
+
 				try:
 					if is_rand_label:
 						y.append(data.rand_label.cpu().numpy())

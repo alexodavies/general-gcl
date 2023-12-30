@@ -7,5 +7,10 @@ parameters:
     min: 0
     max: 1
 command:
-  /usr/bin/env python train.py --node-features -rn --epochs 10
+  - ${env}
+  - python
+  - ${program}
+  - ${args}
+  - -rn
+#  /usr/bin/env python train.py --node-features --epochs 10
 
