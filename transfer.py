@@ -226,6 +226,7 @@ def run(args):
     num = args.num
     checkpoint = args.checkpoint
     evaluation_node_features = args.node_features
+    print(f"\n\nNode features: {evaluation_node_features}\n\n")
     num_epochs = int(args.epochs)
     print(f"Num epochs: {num_epochs}")
 
@@ -262,7 +263,7 @@ def run(args):
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    setup_wandb(args, name = model_name)
+    setup_wandb(args, name = model_name + "-features" if evaluation_node_features else None)
     wandb.log({"Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else None})
 
