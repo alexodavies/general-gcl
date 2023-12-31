@@ -263,9 +263,9 @@ def run(args):
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    setup_wandb(args, name = model_name + "-features" if evaluation_node_features else None)
+    setup_wandb(args, name = model_name + "-features" if evaluation_node_features else model_name)
     wandb.log({"Transfer":True})
-    wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else None})
+    wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
