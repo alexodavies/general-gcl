@@ -21,7 +21,10 @@ def get_chemical_datasets(transforms, num, stage="train"):
     if stage == "train":
         names = ["ogbg-molpcba"]
     else:
-        names = ["ogbg-molpcba", "ogbg-molesol","ogbg-molclintox", "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molhiv"]
+        names = ["ogbg-molpcba", "ogbg-molesol","ogbg-molclintox",
+                 "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molhiv",
+                "ogbg-molbbbp", "ogbg-molbace",
+                 ]
 
     datasets = [PygGraphPropPredDataset(name=name, root='./original_datasets/', transform=transforms) for name in names]
 
