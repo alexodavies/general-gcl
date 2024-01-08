@@ -9,6 +9,13 @@ from littleballoffur.exploration_sampling import *
 from tqdm import tqdm
 from rdkit import Chem
 from rdkit.Chem import Draw
+from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims
+
+full_atom_feature_dims = get_atom_feature_dims()
+full_bond_feature_dims = get_bond_feature_dims()
+
+def get_total_mol_onehot_dims():
+    return np.sum(full_atom_feature_dims), np.sum(full_bond_feature_dims)
 
 def wandb_cfg_to_actual_cfg(original_cfg, wandb_cfg):
     """

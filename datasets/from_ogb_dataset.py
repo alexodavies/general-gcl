@@ -6,6 +6,11 @@ import numpy as np
 from torch_geometric.data import InMemoryDataset, Data
 from tqdm import tqdm
 
+from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims
+
+full_atom_feature_dims = get_atom_feature_dims()
+full_bond_feature_dims = get_bond_feature_dims()
+
 
 # import osmnx as ox
 # from ToyDatasets import *
@@ -41,6 +46,23 @@ def vis_from_pyg(data, filename = None):
     else:
         plt.savefig(filename)
         plt.close()
+
+
+def to_onehot_atoms(x):
+    one_hot_tensors = []
+    for i, num_values in enumerate(full_atom_feature_dims):
+        one_hot = torch.nn.functional.one_hot(x[:, i], num_classes=num_values)
+        one_hot_tensors.append(one_hot)
+
+    return torch.cat(one_hot_tensors, dim=1)
+
+def to_onehot_bonds(x):
+    one_hot_tensors = []
+    for i, num_values in enumerate(full_bond_feature_dims):
+        one_hot = torch.nn.functional.one_hot(x[:, i], num_classes=num_values)
+        one_hot_tensors.append(one_hot)
+
+    return torch.cat(one_hot_tensors, dim=1)
 
 class FromOGBDataset(InMemoryDataset):
     def __init__(self, root, ogb_dataset, stage = "train", num = -1, transform=None, pre_transform=None, pre_filter=None):
@@ -103,9 +125,9 @@ class FromOGBDataset(InMemoryDataset):
                 n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
 
 
-                data = Data(x = item.x[:,0].reshape((-1, 1)),# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)), #
+                data = Data(x = to_onehot_atoms(item.x), # [:,0].reshape((-1, 1)),# torch.ones(n_nodes).to(torch.int).reshape((-1, 1)), #
                             edge_index=item.edge_index,
-                            edge_attr=torch.ones(n_edges).to(torch.int).reshape((-1,1)),
+                            edge_attr= to_onehot_bonds(item.edge_attr), #torch.ones(n_edges).to(torch.int).reshape((-1,1)),
                             y = item.y)
 
                 # data = Data(x = item.x[:,0].reshape((-1, 1)), edge_index=item.edge_index,

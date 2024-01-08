@@ -64,6 +64,7 @@ class Encoder(torch.nn.Module):
 					m.bias.data.fill_(0.0)
 
 	def forward(self, batch, x, edge_index, edge_attr, edge_weight=None):
+		# print(x, x.shape)
 		x = self.atom_encoder(x.to(torch.int))
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN

@@ -26,6 +26,11 @@ class TransferModel(torch.nn.Module):
 		if not self.features:
 			x = torch.ones_like(x)
 
+		if x.shape[1] > 1:
+			x = x[:, 0].reshape(-1,1)
+		if edge_attr.shape[1] > 1:
+			edge_attr = edge_attr[:,0].reshape(-1,1)
+
 		z, node_emb = self.encoder(batch, x, edge_index, edge_attr, edge_weight)
 
 		z = self.output_layer(z)
