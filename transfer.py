@@ -233,7 +233,13 @@ def run(args):
     num_epochs = int(args.epochs)
     print(f"Num epochs: {num_epochs}")
 
+    checkpoint_path = f"outputs/{checkpoint}"
 
+    # Get datasets
+    my_transforms = Compose([initialize_edge_weight])
+    test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+    model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
 
     if checkpoint == "latest":
@@ -265,17 +271,15 @@ def run(args):
 
         args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
 
+
+
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
     setup_wandb(args, name = model_name + "-features" if evaluation_node_features else model_name)
     wandb.log({"Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
-    # Get datasets
-    my_transforms = Compose([initialize_edge_weight])
 
-    test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
-    model_name = checkpoint_path.split("/")[-1].split(".")[0]
+
 
     for i in range(len(val_loaders)):
         val_loader = val_loaders[i]
