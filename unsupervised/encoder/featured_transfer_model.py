@@ -2,6 +2,7 @@ import torch
 from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import global_add_pool
 import torch.nn.functional as F
+import numpy as np
 
 
 class GenericEdgeEncoder(torch.nn.Module):
@@ -12,9 +13,9 @@ class GenericEdgeEncoder(torch.nn.Module):
 				 ):
 		super(GenericEdgeEncoder, self).__init__()
 
-		self.layers = []  # torch.nn.ModuleList()
+		spread_layers = min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * [range(n_layers - 1)]
 
-		layer_sizes = [feat_dim] + [emb_dim] * (n_layers)
+		layer_sizes = [feat_dim] + spread_layers + [emb_dim]
 		for i in range(n_layers):
 			lin = Linear(layer_sizes[i], layer_sizes[i + 1])
 
@@ -41,7 +42,9 @@ class GenericNodeEncoder(torch.nn.Module):
 
 		self.layers = []  # torch.nn.ModuleList()
 
-		layer_sizes = [feat_dim] + [emb_dim] * (n_layers)
+		spread_layers = min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * [range(n_layers - 1)]
+
+		layer_sizes = [feat_dim] + spread_layers + [emb_dim]
 		for i in range(n_layers):
 			lin = Linear(layer_sizes[i], layer_sizes[i + 1])
 
@@ -59,7 +62,7 @@ class GenericNodeEncoder(torch.nn.Module):
 
 class FeaturedTransferModel(torch.nn.Module):
 	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300, features = False,
-				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=1):
+				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=5):
 		super(FeaturedTransferModel, self).__init__()
 
 		self.encoder = encoder
