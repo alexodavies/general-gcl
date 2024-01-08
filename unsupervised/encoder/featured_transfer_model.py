@@ -59,7 +59,7 @@ class GenericNodeEncoder(torch.nn.Module):
 
 class FeaturedTransferModel(torch.nn.Module):
 	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300, features = False,
-				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=3):
+				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=1):
 		super(FeaturedTransferModel, self).__init__()
 
 		self.encoder = encoder
