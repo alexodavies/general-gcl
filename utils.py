@@ -216,7 +216,7 @@ def setup_wandb(cfg, offline = False, name = None):
     param: cfg: same config
     """
 
-    kwargs = {'name': name if name is not None else 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl', 'config': cfg,
+    kwargs = {'name': name if name is not None else 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"), 'project': f'gcl-validation-reiteration', 'config': cfg,
               'settings': wandb.Settings(_disable_stats=False), 'reinit': True, 'entity':'hierarchical-diffusion',
               'mode':'online' if offline else 'online'}
     wandb.init(**kwargs)

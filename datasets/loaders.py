@@ -21,7 +21,7 @@ def get_chemical_datasets(transforms, num, stage="train"):
     if stage == "train":
         names = ["ogbg-molpcba"]
     else:
-        names = ["ogbg-molpcba", "ogbg-molesol","ogbg-molclintox",
+        names = ["ogbg-molesol", "ogbg-molclintox",
                  "ogbg-molfreesolv", "ogbg-mollipo", "ogbg-molhiv",
                 "ogbg-molbbbp", "ogbg-molbace",
                  ]
@@ -31,15 +31,20 @@ def get_chemical_datasets(transforms, num, stage="train"):
     split_idx = [data.get_idx_split() for data in datasets]
 
     if stage == "val":
-        datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
+        train_datasets = [data[split_idx[i]["train"]] for i, data in enumerate(datasets)]
+        val_datasets = [data[split_idx[i]["valid"]] for i, data in enumerate(datasets)]
     else:
         datasets = [data[split_idx[i][stage]] for i, data in enumerate(datasets)]
 
     # Need to convert to pyg inmemorydataset
     num = num if stage != "train" else 5*num
-    datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i],
-                               data,
-                               num=num, stage = stage) for i, data in enumerate(datasets)] #  if names[i] != "ogbg-molpcba" else 5*num, stage=stage
+    if stage != "val":
+        datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num, stage = stage)
+                    for i, data in enumerate(datasets)] #  if names[i] != "ogbg-molpcba" else 5*num, stage=stage
+    else:
+        # Include train data in validation for fine tuning if dataset is evaluation only (ie not molpcba)
+        datasets = [FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], data, num=num, stage = "train") + FromOGBDataset(os.getcwd()+'/original_datasets/'+names[i], val_datasets[i], num=num, stage = "val")
+                    for i, data in enumerate(train_datasets)] #  if names[i] != "ogbg-molpcba" else 5*num, stage=stage
 
     return datasets, names
 
