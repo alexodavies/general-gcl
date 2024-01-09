@@ -13,7 +13,7 @@ class GenericEdgeEncoder(torch.nn.Module):
 				 ):
 		super(GenericEdgeEncoder, self).__init__()
 
-		spread_layers = min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * [range(n_layers - 1)]
+		spread_layers = [min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * i for i in range(n_layers - 1)]
 
 		layer_sizes = [feat_dim] + spread_layers + [emb_dim]
 		for i in range(n_layers):
@@ -42,7 +42,7 @@ class GenericNodeEncoder(torch.nn.Module):
 
 		self.layers = []  # torch.nn.ModuleList()
 
-		spread_layers = min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * [range(n_layers - 1)]
+		spread_layers = [min(emb_dim, feat_dim) + np.abs(feat_dim - emb_dim) * i for i in range(n_layers - 1)]
 
 		layer_sizes = [feat_dim] + spread_layers + [emb_dim]
 		for i in range(n_layers):
