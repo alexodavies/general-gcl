@@ -138,7 +138,6 @@ def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
 
 def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n_epochs = 50):
     # At the moment this is rigid to single-value predictions
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     task = get_task_type(val_loader, name)
 
@@ -310,13 +309,7 @@ def run(args):
             model = TransferModel(
                 Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                 proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
-
-            pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
-                                                                                                                                    checkpoint_path,
-                                                                                                                                    val_loader,
-                                                                                                                                    test_loader,
-                                                                                                                                    name = name,
-                                                                                                                                    n_epochs=num_epochs)
+            pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model, checkpoint_path, val_loader, test_loader, name = name, n_epochs=num_epochs)
             model = TransferModel(
                 Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                         pooling_type=args.pooling_type),

@@ -101,8 +101,8 @@ class FromOGBDataset(InMemoryDataset):
         else:
             keep_n = self.num
 
-        if self.stage == "train":
-            print("Found stage train, dropping targets")
+        if self.stage == "train" and "pcba" in self.processed_paths[self.stage_to_index[self.stage]]:
+            print("Found stage train for PCBA, dropping targets")
             new_data_list = []
             for i, item in enumerate(data_list[:keep_n]):
                 n_nodes, n_edges = item.x.shape[0], item.edge_index.shape[1]
