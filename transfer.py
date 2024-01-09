@@ -356,13 +356,13 @@ def run(args):
 
         fig, ax = plt.subplots(figsize=(6, 4))
 
-        wandb.log({f"{name}-{model_name}-mean": pretrain_mean_score,
-                   f"{name}-{model_name}-dev": pretrain_dev_score,
-                   f"{name}-{model_name}-best": pretrain_val_score})
+        wandb.log({f"{name}-{model_name}-mean": float(pretrain_mean_score),
+                   f"{name}-{model_name}-dev": float(pretrain_dev_score),
+                   f"{name}-{model_name}-best": float(pretrain_val_score)})
 
-        wandb.log({f"{name}-untrained-mean": untrain_mean_score,
-                   f"{name}-untrained-dev": untrain_dev_score,
-                   f"{name}-untrained-best": untrain_val_score})
+        wandb.log({f"{name}-untrained-mean": float(untrain_mean_score),
+                   f"{name}-untrained-dev": float(untrain_dev_score),
+                   f"{name}-untrained-best": float(untrain_val_score)})
 
 
         ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
