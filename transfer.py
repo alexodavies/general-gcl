@@ -385,7 +385,7 @@ def run(args):
 
         ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
                 pretrain_val_losses,
-                label=f"Input Head ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
+                label=f"Pre-Trained ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
                 c = "green")
 
         ax.legend(loc = "upper right", shadow=True)
