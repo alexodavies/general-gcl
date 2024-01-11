@@ -367,8 +367,6 @@ def run(args):
 def arg_parse():
     parser = argparse.ArgumentParser(description='AD-GCL')
 
-    parser.add_argument('--dataset', type=str, default='ogbg-molesol',
-                        help='Dataset')
     parser.add_argument('--model_lr', type=float, default=0.001,
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
@@ -393,7 +391,6 @@ def arg_parse():
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
-    # parser.add_argument('--node-features', help="Whether to include node features in evaluation", action=argparse.BooleanOptionalAction)
 
     parser.add_argument(
         '-f',

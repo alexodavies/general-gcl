@@ -435,9 +435,6 @@ def arg_parse():
     parser.add_argument('--num', type=int, default=1000,
                         help='Number of points included in each dataset')
 
-    parser.add_argument('--redo_views', type=bool, default=False,
-                        help='Whether to re-vis views')
-
     parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
 
     parser.add_argument(
