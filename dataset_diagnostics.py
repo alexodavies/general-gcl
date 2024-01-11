@@ -1,58 +1,15 @@
 import argparse
 import concurrent.futures
-import glob
 import logging
-import os
 import random
-from datetime import datetime
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import pandas as pd
 import torch
-import yaml
-from bokeh.models import HoverTool, BoxZoomTool, ResetTool, Range1d, UndoTool, WheelZoomTool, PanTool
-from bokeh.plotting import figure, output_file, show, ColumnDataSource
-from hdbscan import HDBSCAN
-from ogb.graphproppred import PygGraphPropPredDataset
-
-from umap import UMAP
-from sklearn.decomposition import TruncatedSVD, PCA
-from sklearn.manifold import SpectralEmbedding, Isomap
-
-from torch_geometric.data import DataLoader
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
-from sklearn.linear_model import LinearRegression
-
-import wandb
-from utils import better_to_nx, vis_from_pyg, vis_grid, setup_wandb
-from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from utils import better_to_nx
 from datasets.loaders import get_train_datasets, get_val_datasets, get_test_datasets
-from seaborn import kdeplot
-
-from sklearn.preprocessing import StandardScaler
-
-from datasets.community_dataset import CommunityDataset
-from datasets.cora_dataset import CoraDataset
-from datasets.ego_dataset import EgoDataset
-from datasets.facebook_dataset import FacebookDataset
-from datasets.from_ogb_dataset import FromOGBDataset
-from datasets.neural_dataset import NeuralDataset
-from datasets.random_dataset import RandomDataset
-from datasets.road_dataset import RoadDataset
-from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
-
-
-
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
-from unsupervised.encoder import Encoder
-from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
-from unsupervised.view_learner import ViewLearner
 
 
 def warn(*args, **kwargs):
@@ -171,8 +128,8 @@ def get_metric_values(dataset):
         val_data[i] = clean_graph(item)
 
     # Metrics can be added here - should take an nx graph as input and return a numerical value
-    metrics = [nx.number_of_nodes, nx.number_of_edges, nx.density, safe_diameter,
-               nx.average_clustering, nx.transitivity] #, average_degree, ]
+    metrics = [nx.number_of_nodes, nx.number_of_edges, safe_diameter,
+               nx.average_clustering,] #, average_degree, ]
     metric_names = [prettify_metric_name(metric) for metric in metrics]
     # Compute metrics for all graphs
     metric_arrays = [np.array([metric(g) for g in tqdm(val_data, leave=False, desc=metric_names[i_metric])]) for i_metric, metric in enumerate(metrics)]
@@ -221,27 +178,29 @@ def run(args):
     test_datasets, _ = get_test_datasets(my_transforms)
 
 
-    for i_dataset, dataset in enumerate(train_datasets):
-        arrays, metrics, names = get_metric_values(dataset)
-        if i_dataset == 0:
-            print_string = " & Split & Num. Graphs "
-            for name in names:
-                print_string += f"& {name}"
-            print(print_string + r"\\")
-
-
-        print_string = f"{train_names[i_dataset]} & Train & {len(dataset)} "
-        for i_name, name in enumerate(names):
-            value, dev = np.mean(arrays[i_name]), np.std(arrays[i_name])
-            value = float('%.3g' % value)
-            dev = float('%.3g' % dev)
-            print_string += f"& {value} $\pm$ {dev} "
-        print(print_string + r"\\")
+    # for i_dataset, dataset in enumerate(train_datasets):
+    #     arrays, metrics, names = get_metric_values(dataset)
+    #     if i_dataset == 0:
+    #         print_string = " & Split & Num. Graphs "
+    #         for name in names:
+    #             print_string += f"& {name}"
+    #         print(print_string + r"\\")
+    #
+    #
+    #     print_string = f"{train_names[i_dataset]} & Train & {len(dataset)} "
+    #     for i_name, name in enumerate(names):
+    #         value, dev = np.mean(arrays[i_name]), np.std(arrays[i_name])
+    #         value = float('%.3g' % value)
+    #         dev = float('%.3g' % dev)
+    #         print_string += f"& {value} $\pm$ {dev} "
+    #     print(print_string + r"\\")
 
     print("\n\n")
 
     for i_dataset, dataset in enumerate(val_datasets):
         arrays, metrics, names = get_metric_values(dataset)
+        if "ogbg" not in val_names[i_dataset]:
+            continue
         print_string = f"{val_names[i_dataset]} & Val & {len(dataset)}"
         for i_name, name in enumerate(names):
             value, dev = np.mean(arrays[i_name]), np.std(arrays[i_name])
@@ -254,6 +213,8 @@ def run(args):
 
     for i_dataset, dataset in enumerate(test_datasets):
         arrays, metrics, names = get_metric_values(dataset)
+        if "ogbg" not in val_names[i_dataset]:
+            continue
         print_string = f"{val_names[i_dataset]} & Test & {len(dataset)}"
         for i_name, name in enumerate(names):
             value, dev = np.mean(arrays[i_name]), np.std(arrays[i_name])
