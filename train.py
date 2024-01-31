@@ -1,15 +1,27 @@
+"""
+Anonymous authors, 2023/24
+
+Main script for training FoToM models
+Large sections are from the AD-GCL paper,
+
+Susheel Suresh, Pan Li, Cong Hao, Georgia Tech, and Jennifer Neville. 2021.
+Adversarial Graph Augmentation to Improve Graph Contrastive Learning.
+
+In Advances in Neural Information Processing Systems,
+Vol. 34. 15920–15933.
+https://github.com/susheels/adgcl
+"""
+
 import argparse
 import logging
 import random
 
 import wandb
-from datetime import datetime
 from tqdm import tqdm
 import os
 
 import numpy as np
 import torch
-from ogb.graphproppred import Evaluator
 from torch_geometric.transforms import Compose
 from torch_scatter import scatter
 
@@ -17,7 +29,7 @@ from utils import setup_wandb
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 
 
-from unsupervised.embedding_evaluation import EmbeddingEvaluation, GeneralEmbeddingEvaluation, DummyEmbeddingEvaluation
+from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
@@ -31,6 +43,7 @@ warnings.warn = warn
 
 
 def setup_seed(seed):
+    # Sets seeds for reproducibility
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
@@ -38,6 +51,8 @@ def setup_seed(seed):
     random.seed(seed)
 
 def cl_loss(x1, x2):
+    # CL loss from GraphCL
+
     T = 0.5
     batch_size, _ = x1.size()
 
@@ -257,6 +272,9 @@ def train_epoch_adgcl(dataloader,
     return model_loss_all, view_loss_all, reg_all
 
 def run(args):
+    # Main function for model training
+
+    # Configure logging and training device
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info("Using Device: %s" % device)
@@ -264,15 +282,19 @@ def run(args):
     logging.info(args)
     # setup_seed(args.seed)
 
+    # Check dataset directory exists
     if "original_datasets" not in os.listdir():
         os.mkdir("original_datasets")
 
+    # Whether to use random edge or node dropping as augmentations
+    # Default False for both, means AD-GCL
     random_node_dropping = args.random_node_views
     random_edge_dropping = args.random_edge_views
 
     random_dropping = True if random_edge_dropping or random_node_dropping else False
     drop_proportion = args.dropped
 
+    # Whether to include node labels in evaluation
     evaluation_node_features = args.node_features
     molecules = not args.no_molecules
     socials = not args.no_socials
@@ -280,6 +302,7 @@ def run(args):
 
     my_transforms = Compose([initialize_edge_weight])
 
+    # Select a data subset
     dataset_subset = ["chemical" if molecules else "dummy",
                       "social" if socials else "dummy"]
 
@@ -289,26 +312,31 @@ def run(args):
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
+    # View learner and encoder use the same basic architecture
     model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                         proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
+    # Only need a view learner for adversarial training
     if not random_dropping:
         view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                                    mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
         view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
-
+    # General evaluation - handles multiple downstream tasks during validation
+    # This includes both regression and classification based on the graph labels present
     general_ee = GeneralEmbeddingEvaluation()
 
     model.eval()
 
+    # Evaluate at epoch 0
     general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
 
     model_losses = []
     view_losses = []
     view_regs = []
 
+    # Training loop
     for epoch in tqdm(range(1, args.epochs + 1)):
         fin_model_loss = 0.
         fin_view_loss = 0.
@@ -441,6 +469,7 @@ def arg_parse():
 if __name__ == '__main__':
 
     args = arg_parse()
+    # Change to offline=False to track model training with weights and biases
     args = setup_wandb(args, offline=True)
     run(args)
 

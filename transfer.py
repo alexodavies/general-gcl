@@ -1,14 +1,25 @@
+"""
+Anonymous authors, 2023/24
+
+Script for fine-tuning encoders on our validation datasets
+Large sections are from the AD-GCL paper,
+
+Susheel Suresh, Pan Li, Cong Hao, Georgia Tech, and Jennifer Neville. 2021.
+Adversarial Graph Augmentation to Improve Graph Contrastive Learning.
+
+In Advances in Neural Information Processing Systems,
+Vol. 34. 15920–15933.
+https://github.com/susheels/adgcl
+"""
+
 import argparse
-import concurrent.futures
 import glob
 import logging
 import os
 import random
-from datetime import datetime
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import networkx as nx
+
 import numpy as np
 import torch
 import yaml
@@ -17,22 +28,15 @@ import wandb
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
-from utils import better_to_nx, setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
-from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
+from datasets.loaders import get_val_loaders, get_test_loaders
 
 
-from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
-
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
+from sklearn.metrics import roc_auc_score, mean_squared_error
 from unsupervised.encoder import Encoder
-from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
-from unsupervised.view_learner import ViewLearner
-from unsupervised.encoder import TransferModel, FeaturedTransferModel
-
-from feature_model import FeatureEncoder
-
-from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
+from unsupervised.encoder import TransferModel
+from torch.nn import MSELoss, BCELoss, Sigmoid
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -52,6 +56,8 @@ def setup_seed(seed):
 
 
 def tidy_labels(labels):
+    # Label formatting from dataset code can be messy
+    # This script tidies them into numpy arrays
     if type(labels[0]) is not list:
         if np.sum(labels) == np.sum(np.array(labels).astype(int)):
             labels = np.array(labels).astype(int)
@@ -76,6 +82,8 @@ def tidy_labels(labels):
         return np.array(labels)
 
 def get_task_type(loader, name):
+    # Use dataset labels to find what task is being conducted
+    # Currently handles only single-target regression and binary classification
     val_targets = []
     for i_batch, batch in enumerate(loader):
         if batch.y is None or name == "ogbg-molpcba" or name == "blank":
@@ -106,6 +114,7 @@ def get_task_type(loader, name):
     return task
 
 def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
+    # Evaluates models on each validation/test loader
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.eval()
     with torch.no_grad():
@@ -141,10 +150,12 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
     device = "cuda" if torch.cuda.is_available() else "cpu"
     task = get_task_type(val_loader, name)
 
+    # Each dataset gets its own sub-directory
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
     if model_name not in os.listdir("outputs"):
         os.mkdir(f"outputs/{model_name}")
 
+    # Mainly for molpcba, which is only used in pre-training
     if task == "empty":
         return
 
@@ -161,17 +172,17 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
     model.to(device)
 
+    # Function for classification tasks
     out_fn = Sigmoid()
+
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
-    # pbar = tqdm(range(n_epochs), leave=False)
     best_val_loss, best_epoch = 1.e9, 0
     train_losses, val_losses = [], []
+    # Fairly generic training stuff
     for i_epoch in tqdm(range(n_epochs), leave=False):
         model.train()
-        # ys, y_preds = [], []
         for i_batch, batch in enumerate(val_loader):
             model.zero_grad()
-            # set up
             batch = batch.to(device)
             y = batch.y
 
@@ -190,7 +201,6 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
             model_loss.backward()
             model_optimizer.step()
-        # pbar.set_description(str(model_loss.item())[:6])
         val_score, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
 
         wandb.log({f"{name}/Val-Loss":val_loss.item(),
@@ -203,6 +213,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
         val_losses.append(val_loss.item())
 
+    # This is for simplicity - lower is always better
     if task == "classification":
         final_score = 1 - final_score
 
@@ -217,6 +228,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
 
 def run(args):
+    # Main function, see train.py for more detailed documentation
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info("Using Device: %s" % device)
@@ -238,19 +250,20 @@ def run(args):
     my_transforms = Compose([initialize_edge_weight])
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
-    model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
 
-    if checkpoint == "latest":
-        checkpoint_root = "wandb/latest-run/files"
-        checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-        print(checkpoints)
-        epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-        checkpoint_ind = np.argsort(epochs[::-1])[0]
+    # Currently broken code, ignore
 
-        checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
+    # if checkpoint == "latest":
+    #     checkpoint_root = "wandb/latest-run/files"
+    #     checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
+    #     print(checkpoints)
+    #     epochs = np.array([cp.split('-')[0] for cp in checkpoints])
+    #     checkpoint_ind = np.argsort(epochs[::-1])[0]
+    #
+    #     checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
 
-    elif checkpoint == "untrained":
+    if checkpoint == "untrained":
         checkpoint_path = "untrained"
 
     else:
@@ -277,9 +290,6 @@ def run(args):
     wandb.log({"Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
-
-
-
     for i in range(len(val_loaders)):
         val_loader = val_loaders[i]
         test_loader = test_loaders[i]
@@ -292,11 +302,14 @@ def run(args):
         if name in ["ogbg-molpcba"]:
             continue
 
-        if "ogbg" not in name:
-            continue
+        # Un-comment to evaluate only on benchmark datasets
+        # if "ogbg" not in name:
+        #     continue
 
+        # Number of fine-tuning runs
         n_repeats = 10
 
+        # Ridiculously large placeholder metric values
         best_pretrain_score = 1.e07
         best_untrain_score = 1.e07
 
@@ -306,6 +319,8 @@ def run(args):
 
         pbar = tqdm(range(n_repeats))
         for n in pbar:
+            # Run fine_tune(...) for each repeat
+            # Need to re-load the model
             model = TransferModel(
                 Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                 proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
@@ -335,6 +350,7 @@ def run(args):
             if untrain_val_score <= best_untrain_score:
                 best_untrain_score = untrain_val_score
 
+        # Rest of code is visualisation and metric calculation
         untrain_val_score = str(best_untrain_score)[:6]
         pretrain_val_score = str(best_pretrain_score)[:6]
 
@@ -391,7 +407,6 @@ def run(args):
         ax.legend(loc = "upper right", shadow=True)
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Validation Loss")
-        # ax.set_title(name)
 
         ax.set_yscale('log')
 
