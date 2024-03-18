@@ -113,7 +113,8 @@ class Encoder(torch.nn.Module):
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
 
 				if not node_features:
-					x = torch.ones_like(x)
+					x = torch.ones((x.shape[0],1)).to(device)
+					edge_attr = torch.ones((edge_attr.shape[0],1)).to(device)
 
 				edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
 
