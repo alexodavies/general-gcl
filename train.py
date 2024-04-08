@@ -475,7 +475,18 @@ def arg_parse():
 if __name__ == '__main__':
 
     args = arg_parse()
+
+    if args.no_socials and not args.no_molecules:
+        name = "chem"
+    elif args.no_molecules and not args.no_socials:
+        name = "social"
+    elif args.no_molecules and args.no_socials:
+        name = "random"
+    else:
+        name = "all"
+
+
     # Change to offline=False to track model training with weights and biases
-    args = setup_wandb(args, offline=True)
+    args = setup_wandb(args, name = name, offline=False)
     run(args)
 

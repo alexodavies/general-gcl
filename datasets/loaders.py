@@ -87,6 +87,40 @@ def get_social_datasets(transforms, num, stage = "train"):
 
     return social_datasets, names
 
+def get_random_datasets(transforms, num, stage = "train"):
+    if "original_datasets" not in os.listdir():
+        os.mkdir("original_datasets")
+
+    if stage == "train":
+        social_datasets = [transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage=stage, num=10 * num))]
+        names = ["random"]
+    elif stage == "val":
+        social_datasets = [
+            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
+            transforms(EgoDataset(os.getcwd() + '/original_datasets/' + 'twitch_egos', stage=stage, num=num)),
+            transforms(CoraDataset(os.getcwd() + '/original_datasets/' + 'cora', stage=stage, num=num)),
+            transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
+            transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num)),
+            transforms(TreeDataset(os.getcwd() + '/original_datasets/' + 'trees', stage=stage, num=num)),
+            transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage=stage, num=num)),
+            transforms(CommunityDataset(os.getcwd() + '/original_datasets/' + 'community', stage=stage, num=num))
+            ]
+        names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly", "trees", "random", "community"]
+    else:
+        social_datasets = [
+            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
+            transforms(EgoDataset(os.getcwd() + '/original_datasets/' + 'twitch_egos', stage=stage, num=num)),
+            transforms(CoraDataset(os.getcwd() + '/original_datasets/' + 'cora', stage=stage, num=num)),
+            transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
+            transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num)),
+            transforms(TreeDataset(os.getcwd() + '/original_datasets/' + 'trees', stage=stage, num=num)),
+            transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage=stage, num=num)),
+            transforms(CommunityDataset(os.getcwd() + '/original_datasets/' + 'community', stage=stage, num=num))
+            ]
+        names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly", "trees", "random", "community"]
+
+    return social_datasets, names
+
 def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], num_social = 50000):
     """
     Prepare a torch concat dataset dataloader
@@ -110,7 +144,11 @@ def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], nu
     else:
         print("Skipping socials")
         social_datasets = []
-
+    print(subset)
+    if subset == ["dummy", "dummy"]:
+        datasets, _ = get_random_datasets(transforms, num_social, stage = "train")
+        social_datasets = []
+    print(datasets, social_datasets)
     datasets += social_datasets
     combined = []
     # Concat dataset

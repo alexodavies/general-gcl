@@ -544,7 +544,11 @@ class GeneralEmbeddingEvaluation():
 
 			name = names[i_embedding]
 			evaluator = TargetEvaluation()
-			score = evaluator.evaluate(train_embedding, val_embedding, train_loader, val_loader, name)
+			try:
+				score = evaluator.evaluate(train_embedding, val_embedding, train_loader, val_loader, name)
+			except ValueError as e:
+				print(f"Validation fitting failed for {name}, with error:\n{e}")
+
 
 			if use_wandb and not not_in_training:
 				wandb.log({name: score})
