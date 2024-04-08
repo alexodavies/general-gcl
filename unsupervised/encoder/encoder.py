@@ -92,7 +92,7 @@ class Encoder(torch.nn.Module):
 
 			for i in range(num_gc_layers):
 				nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
-				conv = convolution(nn)
+				conv = GINEConv(nn)
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.convs.append(conv)
 				self.bns.append(bn)
