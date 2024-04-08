@@ -487,6 +487,6 @@ if __name__ == '__main__':
 
 
     # Change to offline=False to track model training with weights and biases
-    args = setup_wandb(args, name = name, offline=False)
+    args = setup_wandb(args, name = name + '_' + args.backbone, offline=False)
     run(args)
 
