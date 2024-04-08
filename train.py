@@ -298,6 +298,8 @@ def run(args):
     evaluation_node_features = args.node_features
     molecules = not args.no_molecules
     socials = not args.no_socials
+
+
     print(f"Chemicals: {molecules}, Socials: {socials}")
 
     my_transforms = Compose([initialize_edge_weight])
@@ -313,13 +315,13 @@ def run(args):
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
     # View learner and encoder use the same basic architecture
-    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
                         proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
     # Only need a view learner for adversarial training
     if not random_dropping:
-        view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+        view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
                                    mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
         view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
 
@@ -459,6 +461,10 @@ def arg_parse():
     parser.add_argument(
         '--dropped', type=float, default=0.2,
         help='Proportion of edges dropped during random edge dropping',
+    )
+
+    parser.add_argument(
+        '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
     )
 
     parser.add_argument('--seed', type=int, default=0)

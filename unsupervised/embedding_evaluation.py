@@ -452,8 +452,13 @@ class TargetEvaluation():
 
 		self.setup_models()
 
-		self.model.fit(train_embedding, train_targets)
-		pred_target = self.model.predict(val_embedding)
+		try:
+			self.model.fit(train_embedding, train_targets)
+			pred_target = self.model.predict(val_embedding)
+		except ValueError as e:
+			print(e)
+			pred_target = np.zeros(val_targets.shape)
+
 
 		self.histogram_preds(val_targets, pred_target, name)
 

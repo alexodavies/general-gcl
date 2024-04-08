@@ -5,9 +5,59 @@ from ogb.graphproppred.mol_encoder import AtomEncoder, BondEncoder
 from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import global_add_pool
 
-from unsupervised.convs import GINEConv, SAGEConv
-from torch_geometric.nn import GATv2Conv
+from unsupervised.convs import GINEConv
+from torch_geometric.nn import GATv2Conv, GCNConv
 
+
+class GenericEdgeEncoder(torch.nn.Module):
+
+	def __init__(self, emb_dim, feat_dim, n_layers = 1):
+		super(GenericEdgeEncoder, self).__init__()
+
+		self.layers = []  # torch.nn.ModuleList()
+
+		layer_sizes = [feat_dim] + [emb_dim] * (n_layers)
+		for i in range(n_layers):
+			lin = Linear(layer_sizes[i], layer_sizes[i + 1])
+
+			# lin = Linear(feat_dim, emb_dim)
+			torch.nn.init.xavier_uniform_(lin.weight.data)
+			self.layers.append(lin)
+
+			if i != n_layers:
+				self.layers.append(ReLU())
+
+		self.model = Sequential(*self.layers)
+
+	# self.model = Sequential(lin)
+
+
+	def forward(self, x):
+		return self.model(x.float())
+
+class GenericNodeEncoder(torch.nn.Module):
+
+	def __init__(self, emb_dim, feat_dim, n_layers = 1):
+		super(GenericNodeEncoder, self).__init__()
+
+
+		self.layers = []  # torch.nn.ModuleList()
+
+		layer_sizes = [feat_dim] + [emb_dim] * (n_layers)
+		for i in range(n_layers):
+			lin = Linear(layer_sizes[i], layer_sizes[i + 1])
+
+			# lin = Linear(feat_dim, emb_dim)
+			torch.nn.init.xavier_uniform_(lin.weight.data)
+			self.layers.append(lin)
+
+			if i != n_layers:
+				self.layers.append(ReLU())
+
+		self.model = Sequential(*self.layers)
+
+	def forward(self, x):
+		return self.model(x.float())
 
 class Encoder(torch.nn.Module):
 	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
@@ -34,9 +84,11 @@ class Encoder(torch.nn.Module):
 
 		self.atom_encoder = AtomEncoder(emb_dim)
 		self.bond_encoder = BondEncoder(emb_dim)
-		self.convolution = convolution
+		self.edge_dim = edge_dim
 
-		if convolution != GATv2Conv:
+		if convolution == "gin":
+			print(f"Using GIN backbone for {num_gc_layers} layers")
+			self.convolution = GINEConv
 
 			for i in range(num_gc_layers):
 				nn = Sequential(Linear(emb_dim, 2*emb_dim), torch.nn.BatchNorm1d(2*emb_dim), ReLU(), Linear(2*emb_dim, emb_dim))
@@ -44,15 +96,42 @@ class Encoder(torch.nn.Module):
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.convs.append(conv)
 				self.bns.append(bn)
-		else:
+
+		elif convolution == "gcn":#
+			print(f"Using GCN backbone for {num_gc_layers} layers")
+			self.convolution = GCNConv
 
 			for i in range(num_gc_layers):
-				conv = convolution(in_channels=emb_dim,
-								   out_channels=emb_dim,
-								   edge_dim=edge_dim)
-				self.convs.append(conv)
+				self.convs.append(GCNConv(emb_dim, emb_dim))
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.bns.append(bn)
+
+		elif convolution == "gat":
+			print(f"Using GAT backbone for {num_gc_layers} layers")
+			self.convolution = GATv2Conv
+
+			for i in range(num_gc_layers):
+				self.convs.append(GATv2Conv(emb_dim, emb_dim))
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.bns.append(bn)
+		else:
+			raise NotImplementedError
+
+
+		# if convolution == GATv2Conv:
+
+
+		# else:
+
+
+
+		# for i in range(num_gc_layers):
+		# 	conv = convolution(in_channels=emb_dim,
+		# 					   out_channels=emb_dim,
+		# 					   edge_dim=edge_dim)
+		# 	self.convs.append(conv)
+		# 	bn = torch.nn.BatchNorm1d(emb_dim)
+		# 	self.bns.append(bn)
 
 		self.init_emb()
 
@@ -74,7 +153,14 @@ class Encoder(torch.nn.Module):
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
-			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+
+			if self.convolution == GINEConv:
+				x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			elif self.convolution == GCNConv:
+				x = self.convs[i](x, edge_index, edge_weight)
+			elif self.convolution == GATv2Conv:
+				x = self.convs[i](x, edge_index)
+
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer
@@ -112,6 +198,10 @@ class Encoder(torch.nn.Module):
 				data = data.to(device)
 				batch, x, edge_index, edge_attr = data.batch, data.x, data.edge_index, data.edge_attr
 
+				# Hard coding for now - should find a smarter way of doing this during evaluation
+				x = x[:, 0].reshape(-1,1)
+				edge_attr = edge_attr[:, 0].reshape(-1,1)
+
 				if not node_features:
 					x = torch.ones_like(x)
 
@@ -119,6 +209,7 @@ class Encoder(torch.nn.Module):
 
 				if x is None:
 					x = torch.ones((batch.shape[0], 1)).to(device)
+
 				x, _ = self.forward(batch, x, edge_index, edge_attr, edge_weight)
 
 				ret.append(x.cpu().numpy())
@@ -133,6 +224,9 @@ class Encoder(torch.nn.Module):
 		ret = np.concatenate(ret, 0)
 		y = np.concatenate(y, 0)
 		return ret, y
+
+
+
 
 class NodeEncoder(torch.nn.Module):
 	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
