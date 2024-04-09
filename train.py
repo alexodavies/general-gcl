@@ -391,7 +391,8 @@ def run(args):
                 'encoder_optimizer_state_dict': model_optimizer.state_dict(),
                 'view_state_dict': None if random_dropping else view_learner.state_dict(),
                 'view_optimizer_state_dict': None if random_dropping else view_optimizer.state_dict()},
-                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}")
+                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
+            wandb.save(f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
 
 
 def arg_parse():
