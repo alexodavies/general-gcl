@@ -1,9 +1,10 @@
 import torch
 from torch.nn import Sequential, Linear, ReLU, Softmax, Sigmoid
-from torch_geometric.nn import global_add_pool, GCNConv
+from torch_geometric.nn import global_add_pool
 import torch.nn.functional as F
 import numpy as np
 from unsupervised.convs import GINEConv, SAGEConv
+from torch_geometric.nn import GCNConv, GATv2Conv
 
 
 class GenericEdgeEncoder(torch.nn.Module):
@@ -88,6 +89,8 @@ class EdgePredictionTransferModel(torch.nn.Module):
 
 		self.softmax = Softmax()
 
+		self.convolution = encoder.convolution
+
 		# nn = Sequential(Linear(proj_hidden_dim, 2 * proj_hidden_dim), torch.nn.BatchNorm1d(2 * proj_hidden_dim), ReLU(),
 		# 				Linear(2 * proj_hidden_dim, output_dim))
 		# self.output_layer = GINEConv(nn)
@@ -141,7 +144,14 @@ class EdgePredictionTransferModel(torch.nn.Module):
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
-			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			if self.convolution == GINEConv:
+				x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			elif self.convolution == GCNConv:
+				x = self.convs[i](x, edge_index, edge_weight)
+			elif self.convolution == GATv2Conv:
+				x = self.convs[i](x, edge_index)
+
+			# x = self.convs[i](x, edge_index, edge_attr, edge_weight)
 			x = self.bns[i](x)
 			if i == self.layers_for_output - 1:
 				# remove relu for the last layer

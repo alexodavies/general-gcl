@@ -1,6 +1,6 @@
 import torch
 from torch.nn import Sequential, Linear, ReLU, Softmax
-from torch_geometric.nn import global_add_pool, GCNConv
+from torch_geometric.nn import global_add_pool, GCNConv, GATv2Conv
 import torch.nn.functional as F
 import numpy as np
 from unsupervised.convs import GINEConv, SAGEConv
@@ -113,9 +113,32 @@ class NodeClassificationTransferModel(torch.nn.Module):
 		# 							out_channels = output_dim,
 		# 							edge_dim = encoder.edge_dim)
 
-		nn = Sequential(Linear(proj_hidden_dim, 2 * proj_hidden_dim), torch.nn.BatchNorm1d(2 * proj_hidden_dim), ReLU(),
-						Linear(2 * proj_hidden_dim, output_dim))
-		self.output_layer = GINEConv(nn)
+
+
+		# nn = Sequential(Linear(proj_hidden_dim, 2 * proj_hidden_dim), torch.nn.BatchNorm1d(2 * proj_hidden_dim), ReLU(),
+		# 				Linear(2 * proj_hidden_dim, output_dim))
+		# self.output_layer = GINEConv(nn)
+
+		self.convolution = encoder.convolution
+
+		# if self.convolution == GINEConv:
+		# 	nn = Sequential(Linear(proj_hidden_dim, 2 * proj_hidden_dim), torch.nn.BatchNorm1d(2 * proj_hidden_dim),
+		# 					ReLU(),
+		# 					Linear(2 * proj_hidden_dim, output_dim))
+		# 	self.output_layer = GINEConv(nn)
+		#
+		# elif self.convolution == GCNConv:
+		# 	self.output_layer = GCNConv(proj_hidden_dim, output_dim)
+		#
+		# elif self.convolution == GATv2Conv:
+		# 	self.output_layer = GATv2Conv(proj_hidden_dim, output_dim)
+		#
+		# else:
+		# 	raise NotImplementedError
+
+		self.output_layer = Linear(proj_hidden_dim, output_dim)
+
+
 		# bn = torch.nn.BatchNorm1d(emb_dim)
 
 
@@ -157,7 +180,15 @@ class NodeClassificationTransferModel(torch.nn.Module):
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
-			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			# x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+
+			if self.convolution == GINEConv:
+				x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			elif self.convolution == GCNConv:
+				x = self.convs[i](x, edge_index, edge_weight)
+			elif self.convolution == GATv2Conv:
+				x = self.convs[i](x, edge_index)
+
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer
@@ -167,9 +198,17 @@ class NodeClassificationTransferModel(torch.nn.Module):
 			xs.append(x)
 
 		node_emb = x
+		z = self.output_layer(x)
 		# z = global_add_pool(x, batch)
 
-		z = self.output_layer(x, edge_index, edge_attr, edge_weight)
+		# if self.convolution == GINEConv:
+		# 	z = self.output_layer(x, edge_index, edge_attr, edge_weight)
+		# elif self.convolution == GCNConv:
+		# 	z = self.output_layer(x, edge_index, edge_weight)
+		# elif self.convolution == GATv2Conv:
+		# 	z = self.output_layer(x, edge_index)
+
+		# z = self.output_layer(x, edge_index, edge_attr, edge_weight)
 		# z shape -> Batch x proj_hidden_dim
 		return self.softmax(z), node_emb
 

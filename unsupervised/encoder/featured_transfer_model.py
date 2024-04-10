@@ -3,6 +3,8 @@ from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import global_add_pool
 import torch.nn.functional as F
 import numpy as np
+from unsupervised.convs import GINEConv
+from torch_geometric.nn import GCNConv, GATv2Conv
 
 
 class GenericEdgeEncoder(torch.nn.Module):
@@ -81,6 +83,8 @@ class FeaturedTransferModel(torch.nn.Module):
 		self.output_layer = Sequential(Linear(self.input_proj_dim, proj_hidden_dim), ReLU(inplace=True),
 									   Linear(proj_hidden_dim, output_dim))
 
+		self.convolution = encoder.convolution
+
 		self.init_emb()
 
 	def init_emb(self):
@@ -103,7 +107,15 @@ class FeaturedTransferModel(torch.nn.Module):
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
-			x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			# x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+
+			if self.convolution == GINEConv:
+				x = self.convs[i](x, edge_index, edge_attr, edge_weight)
+			elif self.convolution == GCNConv:
+				x = self.convs[i](x, edge_index, edge_weight)
+			elif self.convolution == GATv2Conv:
+				x = self.convs[i](x, edge_index)
+
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer

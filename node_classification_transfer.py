@@ -159,7 +159,7 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
     train_mask = dataset.train_mask
     test_mask = dataset.test_mask
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss()
 
     model.train()
@@ -205,91 +205,10 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
     plt.savefig(f"outputs/{model_name}/{name}-node-classification.png")
     plt.close()
 
-    return train_losses, val_losses, scores[-1], max(scores), max(val_losses)
+    return train_losses, val_losses, max(scores), max(scores), min(val_losses)
 
 
 
-
-
-# def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n_epochs = 50):
-#     # At the moment this is rigid to single-value predictions
-#
-#     device = "cuda" if torch.cuda.is_available() else "cpu"
-#     task = get_task_type(val_loader, name)
-#
-#     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-#     if model_name not in os.listdir("outputs"):
-#         os.mkdir(f"outputs/{model_name}")
-#
-#     if task == "empty":
-#         return
-#
-#     if task == "classification":
-#         loss_fn = BCELoss()
-#         score_fn = roc_auc_score
-#     else:
-#         loss_fn = MSELoss()
-#         score_fn = mean_squared_error
-#
-#
-#     if checkpoint_path != "untrained":
-#         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-#         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
-#     model.to(device)
-#
-#     out_fn = Sigmoid()
-#     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
-#     # pbar = tqdm(range(n_epochs), leave=False)
-#     best_val_loss, best_epoch = 1.e9, 0
-#     train_losses, val_losses = [], []
-#     for i_epoch in tqdm(range(n_epochs), leave=False):
-#         model.train()
-#         # ys, y_preds = [], []
-#         for i_batch, batch in enumerate(val_loader):
-#             model.zero_grad()
-#             # set up
-#             batch = batch.to(device)
-#             y = batch.y
-#
-#             if type(y) is list:
-#                 y = torch.tensor(y).to(device)
-#
-#             y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
-#             if task == "classification":
-#                 y_pred = out_fn(y_pred).flatten()
-#                 if y.dim() > 1:
-#                     y = y[:, 0]
-#             y = y.to(y_pred.dtype)
-#
-#             model_loss = loss_fn(y_pred, y)
-#             train_losses.append(model_loss.item())
-#
-#             model_loss.backward()
-#             model_optimizer.step()
-#         # pbar.set_description(str(model_loss.item())[:6])
-#         val_score, val_loss = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)
-#
-#         wandb.log({f"{name}/Val-Loss":val_loss.item(),
-#                    f"{name}/Val-Score":val_score})
-#
-#         if val_loss < best_val_loss:
-#             best_val_loss = val_loss
-#             best_epoch = i_epoch
-#             final_score = evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task)[0]
-#
-#         val_losses.append(val_loss.item())
-#
-#     if task == "classification":
-#         final_score = 1 - final_score
-#
-#     fig, ax = plt.subplots(figsize=(6,4))
-#     ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
-#     ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
-#     ax.legend(shadow=True)
-#     plt.savefig(f"outputs/{model_name}/{name}.png")
-#     plt.close()
-#
-#     return train_losses, val_losses, final_score, best_epoch, best_val_loss
 
 
 def run(args):
@@ -389,7 +308,7 @@ def run(args):
         pbar = tqdm(range(n_repeats))
         for n in pbar:
             model = NodeClassificationTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution = args.backbone),
                 proj_hidden_dim=args.emb_dim, output_dim=val_loader.num_classes, features=evaluation_node_features,
                 node_feature_dim=val_loader.num_features, edge_feature_dim=1).to(device)
 
@@ -399,7 +318,7 @@ def run(args):
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
             model = NodeClassificationTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution = args.backbone),
                 proj_hidden_dim=args.emb_dim, output_dim=val_loader.num_classes, features=evaluation_node_features,
                 node_feature_dim=val_loader.num_features, edge_feature_dim=1).to(device)
 
@@ -544,7 +463,7 @@ def arg_parse():
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=50,
+    parser.add_argument('--epochs', type=int, default=200,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
 
@@ -563,6 +482,10 @@ def arg_parse():
         '--node-features',
         action='store_true',
         help='Whether to include node features (labels) in evaluation',
+    )
+
+    parser.add_argument(
+        '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
     )
 
 
