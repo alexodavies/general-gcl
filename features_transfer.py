@@ -274,7 +274,7 @@ def run(args):
 
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    setup_wandb(args, name = "graph-full-features-" + model_name + "-features" if evaluation_node_features else model_name)
+    setup_wandb(args, name = args.backbone + "-graph-full-features-" + model_name + "-features" if evaluation_node_features else args.backbone + "-" + model_name)
     wandb.log({"Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
