@@ -474,7 +474,7 @@ def arg_parse():
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=10,
+    parser.add_argument('--epochs', type=int, default=50,
                         help='Train Epochs')
     parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
