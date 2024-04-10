@@ -458,21 +458,25 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=5,
+    parser.add_argument('--num_gc_layers', type=int, default=6,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
+
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
-    parser.add_argument('--mlp_edge_model_dim', type=int, default=32,
+    parser.add_argument('--proj_dim', type=int, default=300,
+                        help='projection head dimension')
+
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
                         help='embedding dimension')
-    parser.add_argument('--batch_size', type=int, default=256,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=50,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Train Epochs')
-    parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
+    parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
     parser.add_argument('--seed', type=int, default=0)
 
