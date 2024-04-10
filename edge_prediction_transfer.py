@@ -364,7 +364,8 @@ def run(args):
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
             model = EdgePredictionTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
+                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                        pooling_type=args.pooling_type, convolution=args.backbone),
                 proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features,
                 node_feature_dim=datasets[i].data.num_features, edge_feature_dim=1).to(device)
 

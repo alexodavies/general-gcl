@@ -310,9 +310,12 @@ def run(args):
         pbar = tqdm(range(n_repeats))
         for n in pbar:
             model = FeaturedTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
+                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                        pooling_type=args.pooling_type, convolution=args.backbone),
                 proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features,
                 node_feature_dim=atom_feature_dims, edge_feature_dim=bond_feature_dims).to(device)
+
+            # atom feature dims, bond feature dims
 
             pretrain_train_losses, pretrain_val_losses, pretrain_val_score, pretrain_best_epoch, pretrain_best_val_loss = fine_tune(model,
                                                                                                                                     checkpoint_path,
@@ -488,6 +491,9 @@ def arg_parse():
         help='Whether to include node features (labels) in evaluation',
     )
 
+    parser.add_argument(
+        '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
+    )
 
     return parser.parse_args()
 
