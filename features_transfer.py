@@ -237,7 +237,7 @@ def run(args):
     checkpoint_path = f"outputs/{checkpoint}"
 
     # Get datasets
-    my_transforms = Compose([initialize_edge_weight, NormalizeFeatures()])
+    my_transforms = Compose([initialize_edge_weight])
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
