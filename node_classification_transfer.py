@@ -428,16 +428,16 @@ def run(args):
                                                                                                                                     val_loader,
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
-            model = NodeClassificationTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution = args.backbone),
-                proj_hidden_dim=args.emb_dim, output_dim=val_loader.num_classes, features=evaluation_node_features,
-                node_feature_dim=val_loader.num_features, edge_feature_dim=1).to(device)
-
-            untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
-                                                                                                                              "untrained",
-                                                                                                                              val_loader,
-                                                                                                                              name = name,
-                                                                                                                              n_epochs=num_epochs)
+            # model = NodeClassificationTransferModel(
+            #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution = args.backbone),
+            #     proj_hidden_dim=args.emb_dim, output_dim=val_loader.num_classes, features=evaluation_node_features,
+            #     node_feature_dim=val_loader.num_features, edge_feature_dim=1).to(device)
+            #
+            # untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
+            #                                                                                                                   "untrained",
+            #                                                                                                                   val_loader,
+            #                                                                                                                   name = name,
+            #                                                                                                                   n_epochs=num_epochs)
             #
             # model = TransferModel(
             #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
@@ -451,45 +451,45 @@ def run(args):
             #                                                                                                                   n_epochs=num_epochs)
 
             pretrain_val[n, :] = pretrain_val_losses
-            untrain_val[n, :] = untrain_val_losses
+            # untrain_val[n, :] = untrain_val_losses
             # default_val[n, :] = default_val_losses
 
-            scores = "Pretrain:" + str(pretrain_val_score)[:5] + "  Untrain:" + str(untrain_val_score)[:5] # + "default:  " +  str(default_val_score)[:5]
+            scores = "Pretrain:" + str(pretrain_val_score)[:5] #  + "  Untrain:" + str(untrain_val_score)[:5] # + "default:  " +  str(default_val_score)[:5]
             pbar.set_description(scores)
 
             pretrain_scores.append(pretrain_val_score)
-            untrain_scores.append(untrain_val_score)
+            # untrain_scores.append(untrain_val_score)
             # default_scores.append(default_val_score)
 
             if pretrain_val_score >= best_pretrain_score:
                 best_pretrain_score = pretrain_val_score
-            if untrain_val_score >= best_untrain_score:
-                best_untrain_score = untrain_val_score
+            # if untrain_val_score >= best_untrain_score:
+            #     best_untrain_score = untrain_val_score
             # if default_val_score <= best_default_score:
             #     best_default_score = default_val_score
 
-        untrain_val_score = str(best_untrain_score)[:6]
+        # untrain_val_score = str(best_untrain_score)[:6]
         pretrain_val_score = str(best_pretrain_score)[:6]
         # default_val_score = str(best_default_score)[:6]
 
         pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
-        untrain_val_loss_mean = np.mean(untrain_val, axis=0)
+        # untrain_val_loss_mean = np.mean(untrain_val, axis=0)
         # default_val_loss_mean = np.mean(default_val, axis=0)
 
         pretrain_val_loss_max = np.max(pretrain_val, axis=0)
-        untrain_val_loss_max = np.max(untrain_val, axis=0)
+        # untrain_val_loss_max = np.max(untrain_val, axis=0)
         # default_val_loss_max = np.max(default_val, axis=0)
 
         pretrain_val_loss_min = np.min(pretrain_val, axis=0)
-        untrain_val_loss_min = np.min(untrain_val, axis=0)
+        # untrain_val_loss_min = np.min(untrain_val, axis=0)
         # default_val_loss_min = np.min(default_val, axis=0)
 
         pretrain_mean_score = str(np.mean(pretrain_scores))[:5]
-        untrain_mean_score = str(np.mean(untrain_scores))[:5]
+        # untrain_mean_score = str(np.mean(untrain_scores))[:5]
         # default_mean_score = str(np.mean(default_scores))[:5]
 
         pretrain_dev_score = str(np.std(pretrain_scores))[:5]
-        untrain_dev_score = str(np.std(untrain_scores))[:5]
+        # untrain_dev_score = str(np.std(untrain_scores))[:5]
         # default_dev_score = str(np.std(default_scores))[:5]
 
         fig, ax = plt.subplots(figsize=(6, 4))
@@ -512,16 +512,16 @@ def run(args):
         #         label=f"Default, Score: {default_mean_score} +/- {default_dev_score},  Best: {default_val_score}",
         #         c = "orange")
         #
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_loss_max,
-                untrain_val_loss_min,
-                alpha = 0.5,
-                color = "blue")
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_losses,
-                label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
-                c = "blue")
+        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        #         untrain_val_loss_max,
+        #         untrain_val_loss_min,
+        #         alpha = 0.5,
+        #         color = "blue")
+        #
+        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        #         untrain_val_losses,
+        #         label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
+        #         c = "blue")
 
 
 
