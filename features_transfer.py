@@ -33,6 +33,7 @@ from unsupervised.encoder import TransferModel, FeaturedTransferModel
 from feature_model import FeatureEncoder
 
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
+from torch_geometric.transforms import NormalizeFeatures
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -236,7 +237,7 @@ def run(args):
     checkpoint_path = f"outputs/{checkpoint}"
 
     # Get datasets
-    my_transforms = Compose([initialize_edge_weight])
+    my_transforms = Compose([initialize_edge_weight, NormalizeFeatures()])
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
