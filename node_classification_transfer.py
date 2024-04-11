@@ -39,7 +39,12 @@ from feature_model import FeatureEncoder
 
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 
-from torch_geometric.datasets import Planetoid
+from torch_geometric.datasets import Planetoid, FacebookPagePage, Amazon, WikipediaNetwork, GitHub, LastFMAsia
+from sklearn.model_selection import train_test_split
+from torch_geometric.loader import LinkNeighborLoader
+from torch_geometric.sampler import NeighborSampler, NodeSamplerInput
+from torch_geometric.data import DataLoader, Data
+from torch_geometric.utils import train_test_split_edges, to_undirected
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -143,6 +148,59 @@ def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
         return score_fn(ys, y_preds), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
 
 
+def generate_node_masks(data, test_size=0.2, random_state=None):
+    """
+    Generate train and test masks for a Torch Geometric Data object.
+
+    Args:
+        data (Data): Torch Geometric Data object.
+        test_size (float, optional): Proportion of the dataset to include in the test split.
+                                      Defaults to 0.2.
+        random_state (int, optional): Seed used by the random number generator.
+                                      Defaults to None.
+
+    Returns:
+        tuple: Tuple containing train and test masks.
+    """
+    # Splitting your data into train and test sets
+    num_nodes = data.x.shape[0]
+    train_idx, test_idx = train_test_split(range(num_nodes), test_size=test_size, random_state=random_state)
+
+    # Generating node masks
+    train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    train_mask[train_idx] = True
+
+    test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    test_mask[test_idx] = True
+
+    return train_mask, test_mask
+
+
+def create_data_loaders(graph, train_ratio=0.8, batch_size=64, num_neighbors=[10]):
+    # Convert to undirected graph
+    # graph = to_undirected(graph)
+
+    # Split edge indices
+    edge_index = torch.tensor(graph.edge_index, dtype=torch.long)
+    edge_attr = graph.edge_attr if hasattr(graph, 'edge_attr') else None
+
+    # Create a Data object
+    data = Data(edge_index=edge_index, edge_attr=edge_attr, x=graph.x, y=graph.y)
+
+    # Create train and test masks
+    data.train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    data.train_mask[:int(train_ratio * data.num_nodes)] = 1
+
+    # Create LinkNeighborLoader
+    train_loader = LinkNeighborLoader(
+        data, num_neighbors=num_neighbors, batch_size=batch_size, shuffle=True
+    )
+    test_loader = LinkNeighborLoader(
+        data, num_neighbors=num_neighbors, batch_size=batch_size, shuffle=False
+    )
+
+    return train_loader, test_loader
+
 def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -156,8 +214,41 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
 
     model.to(device)
 
-    train_mask = dataset.train_mask
-    test_mask = dataset.test_mask
+    # train_loader = LinkNeighborLoader(
+    #     data=dataset,
+    #     num_neighbors=[10, 10],
+    #     neg_sampling_ratio=2.0,
+    #     batch_size=512,
+    #     shuffle=True,
+    # )
+
+    # sampler = NeighborSampler(dataset.data,
+    #                           [10,10],
+    #                           directed = False)
+    #
+    # seed_nodes = torch.randint(1, dataset.data.num_nodes, (1000,))
+    # sampler_input = NodeSamplerInput(node=seed_nodes)
+    #
+    # sampled_graphs = sampler.sample_from_nodes(sampler_input)
+    #
+    # print(sampled_graphs)
+    # train, test = train_test_split(sampled_graphs, test_size=0.2, shuffle = True)
+    #
+    #
+    # batch_size = 64
+    # train_loader = DataLoader(train, batch_size=batch_size)
+    # test_loader = DataLoader(test, batch_size=batch_size)
+
+    train_loader, test_loader = create_data_loaders(dataset.data, num_neighbors=[10,10])
+
+
+
+
+    try:
+        train_mask = dataset.train_mask
+        test_mask = dataset.test_mask
+    except AttributeError:
+        train_mask, test_mask = generate_node_masks(dataset)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss()
@@ -169,34 +260,36 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
 
     train_losses, val_losses, scores = [], [], []
     for i_epoch in tqdm(range(n_epochs), leave=False):
-        model.train()
-        optimizer.zero_grad()
-        out = model(dataset.x.to(device),
-                    dataset.edge_index.to(device),
-                    torch.ones(dataset.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
-        # print(out.shape, dataset.y.shape, dataset.train_mask.shape, dataset.test_mask.shape)
-        loss = criterion(out[dataset.train_mask], dataset.y[dataset.train_mask].to(device))
+        epoch_train_losses = []
+        for ibatch, batch in enumerate(tqdm(train_loader, leave=False)):
+            model.train()
+            optimizer.zero_grad()
 
-        loss.backward()  # Derive gradients.
-        optimizer.step()
-
-
+            # Use train mask to filter training nodes and their labels
+            train_batch = batch.to(device)
+            train_mask = train_batch.train_mask
+            out = model(train_batch.x, train_batch.edge_index,
+                        torch.ones(train_batch.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
+            loss = criterion(out[train_mask], train_batch.y[train_mask].to(device))
+            epoch_train_losses.append(loss.item())
+            loss.backward()  # Derive gradients.
+            optimizer.step()
 
         model.eval()
+        epoch_scores, epoch_test_losses = [], []
+        for ibatch, batch in enumerate(tqdm(test_loader, leave=False)):
+            # No need to use train_mask during validation
+            val_batch = batch.to(device)
+            out = model(val_batch.x, val_batch.edge_index,
+                        torch.ones(val_batch.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
+            val_loss = criterion(out, val_batch.y.to(device))
+            epoch_test_losses.append(val_loss.item())
+            preds = np.argmax(out.detach().cpu().numpy(), axis=1)
+            epoch_scores.append(accuracy_score(preds, batch.y.cpu().numpy()))
 
-        out = model(dataset.x.to(device),
-                    dataset.edge_index.to(device),
-                    torch.ones(dataset.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
-
-        val_loss = criterion(out[dataset.test_mask], dataset.y[dataset.test_mask].to(device))
-
-        train_losses.append(loss.item())
-        val_losses.append(val_loss.item())
-
-        preds = np.argmax(out[dataset.test_mask].detach().cpu().numpy(), axis = 1)
-
-        scores.append(accuracy_score(preds,
-                                    dataset.y[dataset.test_mask].numpy()))
+        train_losses.append(np.mean(epoch_train_losses))
+        val_losses.append(np.mean(epoch_test_losses))
+        scores.append(np.mean(epoch_scores))
 
     fig, ax = plt.subplots(figsize=(6,4))
     ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
@@ -235,8 +328,24 @@ def run(args):
     # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     # model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
-    val_loaders = [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
-    names = ["Cora", "Citeseer", "PubMed"]
+    # val_loaders = [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
+    # names = ["Cora", "Citeseer", "PubMed"]
+
+    # test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+    # model_name = checkpoint_path.split("/")[-1].split(".")[0]
+    val_loaders = []
+    val_loaders += [FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms),
+                    GitHub(root='original_datasets/GitHub', transform=my_transforms),
+                    LastFMAsia(root='original_datasets/LastFM', transform=my_transforms)]
+    # val_loaders += [Amazon(root='original_datasets/Amazon', name=name, transform=my_transforms) for name in ["Computers", "Photo"]]
+    val_loaders += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
+    names = ["Facebook", "GitHub", "LastFM",  "Cora", "Citeseer", "PubMed"]
+
+    print(val_loaders[0].y, val_loaders[0].y.shape)
+
+
+
 
     if checkpoint == "latest":
         checkpoint_root = "wandb/latest-run/files"
@@ -270,8 +379,10 @@ def run(args):
 
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
-    setup_wandb(args, name = "full-features-" + model_name + "-node-classification" if evaluation_node_features else model_name + "-node-classification", offline=True)
-    wandb.log({"Transfer":True})
+    setup_wandb(args,
+                name = "full-features-" + model_name + "-node-classification" if evaluation_node_features else model_name + "-node-classification",
+                offline=True)
+    wandb.log({"Transfer":True, "Node_Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
 
@@ -436,7 +547,7 @@ def run(args):
 
         features_string_tag = "feats" if evaluation_node_features else "no-feats"
         plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")
-        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")})
+        wandb.log({f"{name}-node-class/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")})
         plt.close()
 
 

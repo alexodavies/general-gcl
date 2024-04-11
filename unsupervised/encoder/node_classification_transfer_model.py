@@ -153,7 +153,6 @@ class NodeClassificationTransferModel(torch.nn.Module):
 
 	def forward(self, x, edge_index, edge_attr, edge_weight=None):
 		if not self.features:
-			print("dropping features")
 			x = torch.ones_like(x)
 		# print(x)
 

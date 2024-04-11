@@ -42,6 +42,7 @@ from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 from torch_geometric.datasets import Planetoid, Amazon, FacebookPagePage
 from torch_geometric.data import DataLoader
 from torch_geometric.loader import LinkNeighborLoader
+from torch_geometric.sampler import NeighborSampler
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -314,7 +315,7 @@ def run(args):
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
     setup_wandb(args, name = "full-features-" + model_name + "-edge-prediction" if evaluation_node_features else model_name + "-edge-prediction", offline=True)
-    wandb.log({"Transfer":True})
+    wandb.log({"Transfer":True, "Edge_Transfer":True})
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
 
@@ -488,7 +489,7 @@ def run(args):
 
         features_string_tag = "feats" if evaluation_node_features else "no-feats"
         plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")
-        wandb.log({f"{name}/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")})
+        wandb.log({f"{name}-edge-pred/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")})
         plt.close()
 
 
