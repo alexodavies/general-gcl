@@ -346,10 +346,10 @@ def run(args):
         # best_default_score = 1.e07
 
         pretrain_val = np.zeros((n_repeats, num_epochs))
-        untrain_val = np.zeros((n_repeats, num_epochs))
+        # untrain_val = np.zeros((n_repeats, num_epochs))
         # default_val = np.zeros((n_repeats, num_epochs))
         pretrain_scores = []
-        untrain_scores = []
+        # untrain_scores = []
 
         pbar = tqdm(range(n_repeats))
         for n in pbar:
@@ -364,18 +364,18 @@ def run(args):
                                                                                                                                     test_loader,
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
-            model = EdgePredictionTransferModel(
-                Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-                        pooling_type=args.pooling_type, convolution=args.backbone),
-                proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features,
-                node_feature_dim=datasets[i].data.num_features, edge_feature_dim=1).to(device)
-
-            untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
-                                                                                                                              "untrained",
-                                                                                                                              val_loader,
-                                                                                                                              test_loader,
-                                                                                                                              name = name,
-                                                                                                                              n_epochs=num_epochs)
+            # model = EdgePredictionTransferModel(
+            #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+            #             pooling_type=args.pooling_type, convolution=args.backbone),
+            #     proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features,
+            #     node_feature_dim=datasets[i].data.num_features, edge_feature_dim=1).to(device)
+            #
+            # untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
+            #                                                                                                                   "untrained",
+            #                                                                                                                   val_loader,
+            #                                                                                                                   test_loader,
+            #                                                                                                                   name = name,
+            #                                                                                                                   n_epochs=num_epochs)
             #
             # model = TransferModel(
             #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
@@ -389,20 +389,20 @@ def run(args):
             #                                                                                                                   n_epochs=num_epochs)
 
             pretrain_val[n, :] = pretrain_val_losses
-            untrain_val[n, :] = untrain_val_losses
+            # untrain_val[n, :] = untrain_val_losses
             # default_val[n, :] = default_val_losses
 
-            scores = "Pretrain:" + str(pretrain_val_score)[:5] + "  Untrain:" + str(untrain_val_score)[:5] # + "default:  " +  str(default_val_score)[:5]
+            scores = "Pretrain:" + str(pretrain_val_score)[:5] # + "  Untrain:" + str(untrain_val_score)[:5] # + "default:  " +  str(default_val_score)[:5]
             pbar.set_description(scores)
 
             pretrain_scores.append(pretrain_val_score)
-            untrain_scores.append(untrain_val_score)
+            # untrain_scores.append(untrain_val_score)
             # default_scores.append(default_val_score)
 
             if pretrain_val_score >= best_pretrain_score:
                 best_pretrain_score = pretrain_val_score
-            if untrain_val_score >= best_untrain_score:
-                best_untrain_score = untrain_val_score
+            # if untrain_val_score >= best_untrain_score:
+            #     best_untrain_score = untrain_val_score
             # if default_val_score <= best_default_score:
             #     best_default_score = default_val_score
 
@@ -411,23 +411,23 @@ def run(args):
         # default_val_score = str(best_default_score)[:6]
 
         pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
-        untrain_val_loss_mean = np.mean(untrain_val, axis=0)
+        # untrain_val_loss_mean = np.mean(untrain_val, axis=0)
         # default_val_loss_mean = np.mean(default_val, axis=0)
 
         pretrain_val_loss_max = np.max(pretrain_val, axis=0)
-        untrain_val_loss_max = np.max(untrain_val, axis=0)
+        # untrain_val_loss_max = np.max(untrain_val, axis=0)
         # default_val_loss_max = np.max(default_val, axis=0)
 
         pretrain_val_loss_min = np.min(pretrain_val, axis=0)
-        untrain_val_loss_min = np.min(untrain_val, axis=0)
+        # untrain_val_loss_min = np.min(untrain_val, axis=0)
         # default_val_loss_min = np.min(default_val, axis=0)
 
         pretrain_mean_score = str(np.mean(pretrain_scores))[:5]
-        untrain_mean_score = str(np.mean(untrain_scores))[:5]
+        # untrain_mean_score = str(np.mean(untrain_scores))[:5]
         # default_mean_score = str(np.mean(default_scores))[:5]
 
         pretrain_dev_score = str(np.std(pretrain_scores))[:5]
-        untrain_dev_score = str(np.std(untrain_scores))[:5]
+        # untrain_dev_score = str(np.std(untrain_scores))[:5]
         # default_dev_score = str(np.std(default_scores))[:5]
 
         fig, ax = plt.subplots(figsize=(6, 4))
@@ -437,9 +437,9 @@ def run(args):
                    f"{name}-edge-pred/model-dev": float(pretrain_dev_score),
                    f"{name}-edge-pred/model-best": float(pretrain_val_score)})
 
-        wandb.log({f"untrained-edge-pred/model-mean": float(untrain_mean_score),
-                   f"untrained-edge-pred/model-dev": float(untrain_dev_score),
-                   f"untrained-edge-pred/model-best": float(untrain_val_score)})
+        # wandb.log({f"untrained-edge-pred/model-mean": float(untrain_mean_score),
+        #            f"untrained-edge-pred/model-dev": float(untrain_dev_score),
+        #            f"untrained-edge-pred/model-best": float(untrain_val_score)})
         #
         #
         # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
@@ -454,16 +454,16 @@ def run(args):
         #         label=f"Default, Score: {default_mean_score} +/- {default_dev_score},  Best: {default_val_score}",
         #         c = "orange")
         #
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_loss_max,
-                untrain_val_loss_min,
-                alpha = 0.5,
-                color = "blue")
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-                untrain_val_losses,
-                label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
-                c = "blue")
+        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        #         untrain_val_loss_max,
+        #         untrain_val_loss_min,
+        #         alpha = 0.5,
+        #         color = "blue")
+        #
+        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        #         untrain_val_losses,
+        #         label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
+        #         c = "blue")
 
 
 
@@ -504,21 +504,25 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=5,
+    parser.add_argument('--num_gc_layers', type=int, default=6,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
+
     parser.add_argument('--emb_dim', type=int, default=300,
                         help='embedding dimension')
-    parser.add_argument('--mlp_edge_model_dim', type=int, default=32,
+    parser.add_argument('--proj_dim', type=int, default=300,
+                        help='projection head dimension')
+
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
                         help='embedding dimension')
-    parser.add_argument('--batch_size', type=int, default=256,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='batch size')
     parser.add_argument('--drop_ratio', type=float, default=0.2,
                         help='Dropout Ratio / Probability')
-    parser.add_argument('--epochs', type=int, default=50,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Train Epochs')
-    parser.add_argument('--reg_lambda', type=float, default=5.0, help='View Learner Edge Perturb Regularization Strength')
+    parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
 
     parser.add_argument('--seed', type=int, default=0)
 
