@@ -69,7 +69,7 @@ class GenericNodeEncoder(torch.nn.Module):
 
 class EdgePredictionTransferModel(torch.nn.Module):
 	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300, features = False,
-				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=3, layers_for_output = None):
+				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=1, layers_for_output = None):
 		super(EdgePredictionTransferModel, self).__init__()
 
 		self.encoder = encoder
@@ -130,8 +130,7 @@ class EdgePredictionTransferModel(torch.nn.Module):
 
 	def embedding_forward(self, x, edge_index, edge_attr, edge_weight=None, mask = None):
 		if not self.features:
-			print("dropping features")
-			x = torch.ones_like(x)
+			x = torch.ones_like(x)[:,0].reshape(-1,1)
 
 		x = self.atom_encoder(x.to(torch.int))
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))

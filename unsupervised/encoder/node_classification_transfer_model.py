@@ -153,7 +153,7 @@ class NodeClassificationTransferModel(torch.nn.Module):
 
 	def forward(self, x, edge_index, edge_attr, edge_weight=None):
 		if not self.features:
-			x = torch.ones_like(x)
+			x = torch.ones_like(x)[:,0].reshape(-1,1)
 		# print(x)
 
 		x = self.atom_encoder(x.to(torch.int))
