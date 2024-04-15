@@ -68,7 +68,7 @@ class GenericNodeEncoder(torch.nn.Module):
 
 class NodeClassificationTransferModel(torch.nn.Module):
 	def __init__(self, encoder, proj_hidden_dim=300, output_dim=300, features = False,
-				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=1, layers_for_output = 2):
+				 node_feature_dim=512, edge_feature_dim=512, input_head_layers=3, layers_for_output = None):
 		super(NodeClassificationTransferModel, self).__init__()
 
 		self.encoder = encoder
@@ -81,7 +81,7 @@ class NodeClassificationTransferModel(torch.nn.Module):
 		self.node_feature_dim = node_feature_dim
 		self.edge_feature_dim = edge_feature_dim
 		self.input_head_layers = input_head_layers
-		self.layers_for_output = layers_for_output
+		self.layers_for_output = layers_for_output if layers_for_output is not None else len(self.convs)
 
 		self.atom_encoder = GenericNodeEncoder(proj_hidden_dim, node_feature_dim, n_layers = self.input_head_layers)
 		self.bond_encoder = GenericEdgeEncoder(proj_hidden_dim, edge_feature_dim, n_layers = self.input_head_layers)
