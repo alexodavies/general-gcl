@@ -431,7 +431,7 @@ def run(args):
         # untrain_dev_score = str(np.std(untrain_scores))[:5]
         # default_dev_score = str(np.std(default_scores))[:5]
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        # fig, ax = plt.subplots(figsize=(6, 4))
 
 
         wandb.log({f"{name}-edge-pred/model-mean": float(pretrain_mean_score),
@@ -468,30 +468,30 @@ def run(args):
 
 
 
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_loss_max,
-                pretrain_val_loss_min,
-                alpha = 0.5,
-                color = "green")
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_losses,
-                label=f"Pre-Trained w/Features ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
-                c = "green")
-
-        ax.legend(loc = "upper right", shadow=True)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Validation Loss")
-        # ax.set_title(name)
-
-        ax.set_yscale('log')
-
-        plt.tight_layout()
-
-        features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")
-        wandb.log({f"{name}-edge-pred/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")})
-        plt.close()
+        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+        #         pretrain_val_loss_max,
+        #         pretrain_val_loss_min,
+        #         alpha = 0.5,
+        #         color = "green")
+        #
+        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+        #         pretrain_val_losses,
+        #         label=f"Pre-Trained w/Features ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
+        #         c = "green")
+        #
+        # ax.legend(loc = "upper right", shadow=True)
+        # ax.set_xlabel("Epoch")
+        # ax.set_ylabel("Validation Loss")
+        # # ax.set_title(name)
+        #
+        # ax.set_yscale('log')
+        #
+        # plt.tight_layout()
+        #
+        # features_string_tag = "feats" if evaluation_node_features else "no-feats"
+        # plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")
+        # wandb.log({f"{name}-edge-pred/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-edge-pred.png")})
+        # plt.close()
 
 
 

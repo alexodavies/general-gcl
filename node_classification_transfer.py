@@ -497,7 +497,7 @@ def run(args):
         # untrain_dev_score = str(np.std(untrain_scores))[:5]
         # default_dev_score = str(np.std(default_scores))[:5]
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        # fig, ax = plt.subplots(figsize=(6, 4))
 
 
         wandb.log({f"{name}-node-class/model-mean": float(pretrain_mean_score),
@@ -505,55 +505,55 @@ def run(args):
                    f"{name}-node-class/model-best": float(pretrain_val_score)})
         #
         #
-        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
-        #         default_val_loss_max,
-        #         default_val_loss_min,
+        # # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
+        # #         default_val_loss_max,
+        # #         default_val_loss_min,
+        # #         alpha = 0.5,
+        # #         color = "orange")
+        # #
+        # #
+        # # ax.plot(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
+        # #         default_val_losses,
+        # #         label=f"Default, Score: {default_mean_score} +/- {default_dev_score},  Best: {default_val_score}",
+        # #         c = "orange")
+        # #
+        # # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        # #         untrain_val_loss_max,
+        # #         untrain_val_loss_min,
+        # #         alpha = 0.5,
+        # #         color = "blue")
+        # #
+        # # ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
+        # #         untrain_val_losses,
+        # #         label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
+        # #         c = "blue")
+        #
+        #
+        #
+        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+        #         pretrain_val_loss_max,
+        #         pretrain_val_loss_min,
         #         alpha = 0.5,
-        #         color = "orange")
+        #         color = "green")
         #
+        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
+        #         pretrain_val_losses,
+        #         label=f"Pre-Trained w/Features ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
+        #         c = "green")
         #
-        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
-        #         default_val_losses,
-        #         label=f"Default, Score: {default_mean_score} +/- {default_dev_score},  Best: {default_val_score}",
-        #         c = "orange")
+        # ax.legend(loc = "upper right", shadow=True)
+        # ax.set_xlabel("Epoch")
+        # ax.set_ylabel("Validation Loss")
+        # # ax.set_title(name)
         #
-        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-        #         untrain_val_loss_max,
-        #         untrain_val_loss_min,
-        #         alpha = 0.5,
-        #         color = "blue")
+        # ax.set_yscale('log')
         #
-        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-        #         untrain_val_losses,
-        #         label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
-        #         c = "blue")
-
-
-
-        ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_loss_max,
-                pretrain_val_loss_min,
-                alpha = 0.5,
-                color = "green")
-
-        ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-                pretrain_val_losses,
-                label=f"Pre-Trained w/Features ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
-                c = "green")
-
-        ax.legend(loc = "upper right", shadow=True)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Validation Loss")
-        # ax.set_title(name)
-
-        ax.set_yscale('log')
-
-        plt.tight_layout()
-
-        features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")
-        wandb.log({f"{name}-node-class/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")})
-        plt.close()
+        # plt.tight_layout()
+        #
+        # features_string_tag = "feats" if evaluation_node_features else "no-feats"
+        # plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")
+        # wandb.log({f"{name}-node-class/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")})
+        # plt.close()
 
 
 
