@@ -275,28 +275,33 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
             loss.backward()  # Derive gradients.
             optimizer.step()
 
-        model.eval()
-        epoch_scores, epoch_test_losses = [], []
-        for ibatch, batch in enumerate(tqdm(test_loader, leave=False)):
-            # No need to use train_mask during validation
-            val_batch = batch.to(device)
-            out = model(val_batch.x, val_batch.edge_index,
-                        torch.ones(val_batch.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
-            val_loss = criterion(out, val_batch.y.to(device))
-            epoch_test_losses.append(val_loss.item())
-            preds = np.argmax(out.detach().cpu().numpy(), axis=1)
-            epoch_scores.append(accuracy_score(preds, batch.y.cpu().numpy()))
+
 
         train_losses.append(np.mean(epoch_train_losses))
-        val_losses.append(np.mean(epoch_test_losses))
-        scores.append(np.mean(epoch_scores))
 
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
-    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
-    ax.legend(shadow=True)
-    plt.savefig(f"outputs/{model_name}/{name}-node-classification.png")
-    plt.close()
+    model.eval()
+    epoch_scores, epoch_test_losses = [], []
+    for ibatch, batch in enumerate(tqdm(test_loader, leave=False)):
+        # No need to use train_mask during validation
+        val_batch = batch.to(device)
+        test_mask = ~val_batch.train_mask
+        out = model(val_batch.x, val_batch.edge_index,
+                    torch.ones(val_batch.edge_index.shape[1]).reshape(-1, 1).to(device))[0]
+        val_loss = criterion(out[test_mask], val_batch.y.to(device)[test_mask])
+        epoch_test_losses.append(val_loss.item())
+        preds = np.argmax(out[test_mask].detach().cpu().numpy(), axis=1)
+        epoch_scores.append(accuracy_score(preds, batch.y[test_mask].cpu().numpy()))
+
+    val_losses.append(np.mean(epoch_test_losses))
+    scores.append(np.mean(epoch_scores))
+
+    #
+    # fig, ax = plt.subplots(figsize=(6,4))
+    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
+    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
+    # ax.legend(shadow=True)
+    # plt.savefig(f"outputs/{model_name}/{name}-node-classification.png")
+    # plt.close()
 
     return train_losses, val_losses, max(scores), max(scores), min(val_losses)
 

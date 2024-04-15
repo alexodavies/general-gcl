@@ -207,30 +207,31 @@ def fine_tune(model, checkpoint_path, val_data, test_data, name, n_epochs):
 
             epoch_train_losses.append(loss.item())
 
-        model.eval()
-        with torch.no_grad():
-            for ibatch, batch in enumerate(tqdm(test_loader, leave=False)):
-                if ibatch > 10:
-                    continue
-                batch = batch.to(device)
-                out = model(batch)
-
-                # print(out.shape, dataset.y.shape, dataset.train_mask.shape, dataset.test_mask.shape)
-                loss = criterion(out.flatten(), batch.edge_label.to(device))
-
-                score = score_fn(np.around(out.flatten().cpu().numpy(), decimals = 0), batch.edge_label.cpu().numpy())
-                epoch_val_losses.append(loss.item())
-                scores.append(score)
 
         train_losses.append(np.mean(epoch_train_losses))
-        val_losses.append(np.mean(epoch_val_losses))
 
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
-    ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
-    ax.legend(shadow=True)
-    plt.savefig(f"outputs/{model_name}/{name}-edge-pred.png")
-    plt.close()
+
+    model.eval()
+    with torch.no_grad():
+        for ibatch, batch in enumerate(tqdm(test_loader, leave=False)):
+            batch = batch.to(device)
+            out = model(batch)
+
+            # print(out.shape, dataset.y.shape, dataset.train_mask.shape, dataset.test_mask.shape)
+            loss = criterion(out.flatten(), batch.edge_label.to(device))
+
+            score = score_fn(np.around(out.flatten().cpu().numpy(), decimals = 0), batch.edge_label.cpu().numpy())
+            epoch_val_losses.append(loss.item())
+    scores.append(score)
+    val_losses.append(np.mean(epoch_val_losses))
+
+
+    # fig, ax = plt.subplots(figsize=(6,4))
+    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
+    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
+    # ax.legend(shadow=True)
+    # plt.savefig(f"outputs/{model_name}/{name}-edge-pred.png")
+    # plt.close()
 
     return train_losses, val_losses, max(scores), max(scores), max(val_losses)
 
