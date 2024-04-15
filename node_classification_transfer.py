@@ -562,7 +562,7 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=5,
+    parser.add_argument('--num_gc_layers', type=int, default=6,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
