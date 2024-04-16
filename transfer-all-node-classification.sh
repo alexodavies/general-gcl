@@ -3,14 +3,16 @@
 
 #python node_classification_transfer.py --checkpoint untrained --epochs 10 --backbone gin -f
 
-for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
-do
-    python node_classification_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin  --batch_size 512
-done
 
 for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
 do
     python node_classification_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin  --batch_size 512 -f
+done
+
+
+for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
+do
+    python node_classification_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin  --batch_size 512
 done
 
 #for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt

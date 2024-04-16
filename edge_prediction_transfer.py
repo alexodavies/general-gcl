@@ -169,7 +169,7 @@ def fine_tune(model, checkpoint_path, val_data, test_data, name, n_epochs):
 
     train_loader = LinkNeighborLoader(
         data=val_data,
-        num_neighbors=[10, 10],
+        num_neighbors=[5,5,5],
         neg_sampling_ratio=2.0,
         batch_size=512,
         shuffle=True,
@@ -177,7 +177,7 @@ def fine_tune(model, checkpoint_path, val_data, test_data, name, n_epochs):
 
     test_loader = LinkNeighborLoader(
         data=test_data,
-        num_neighbors=[10, 10],
+        num_neighbors=[5,5,5],
         neg_sampling_ratio=2.0,
         batch_size=512,
         shuffle=True,
@@ -271,16 +271,16 @@ def run(args):
     # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     # model_name = checkpoint_path.split("/")[-1].split(".")[0]
     datasets = []
-    datasets += [FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms)]
+    # datasets += [FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms)]
     datasets += [Amazon(root='original_datasets/Amazon', name=name, transform=my_transforms) for name in ["Computers", "Photo"]]
-    datasets += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
+    datasets += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Citeseer", "PubMed"]]
 
     splits = [split_transform(split.data) for split in datasets]
 
     train_splits = [split[0] for split in splits]
     val_splits = [split[1] for split in splits]
     test_splits = [split[2] for split in splits]
-    names = ["Facebook", "Amazon-Computers", "Amazon-Photo",  "Cora", "Citeseer", "PubMed"]
+    names = ["Amazon-Computers", "Amazon-Photo",  "Citeseer", "PubMed"]
 
 
     if checkpoint == "latest":

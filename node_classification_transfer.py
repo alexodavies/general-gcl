@@ -239,7 +239,7 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
     # train_loader = DataLoader(train, batch_size=batch_size)
     # test_loader = DataLoader(test, batch_size=batch_size)
 
-    train_loader, test_loader = create_data_loaders(dataset.data, num_neighbors=[10,10])
+    train_loader, test_loader = create_data_loaders(dataset.data, num_neighbors=[5,5,5])
 
 
 
@@ -340,12 +340,12 @@ def run(args):
     # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     # model_name = checkpoint_path.split("/")[-1].split(".")[0]
     val_loaders = []
-    val_loaders += [FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms),
+    val_loaders += [ # FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms),
                     GitHub(root='original_datasets/GitHub', transform=my_transforms),
                     LastFMAsia(root='original_datasets/LastFM', transform=my_transforms)]
     # val_loaders += [Amazon(root='original_datasets/Amazon', name=name, transform=my_transforms) for name in ["Computers", "Photo"]]
-    val_loaders += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
-    names = ["Facebook", "GitHub", "LastFM",  "Cora", "Citeseer", "PubMed"]
+    val_loaders += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Citeseer", "PubMed"]]
+    names = ["GitHub", "LastFM",  "Citeseer", "PubMed"]
 
     print(val_loaders[0].y, val_loaders[0].y.shape)
 

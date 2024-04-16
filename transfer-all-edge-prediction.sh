@@ -3,14 +3,16 @@
 
 #python edge_prediction_transfer.py --checkpoint untrained --epochs 4 --backbone gin --batch_size 512 -f
 
-for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
-do
-    python edge_prediction_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin --batch_size 512
-done
 
 for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
 do
-    python edge_prediction_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin --batch_size 512 -f
+    python edge_prediction_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin --batch_size 128 -f
+done
+
+
+for checkpoint_name in  untrained all-100.pt chem-100.pt social-100.pt edge-views-all.pt
+do
+    python edge_prediction_transfer.py --checkpoint "$checkpoint_name" --epochs 5 --backbone gin --batch_size 128
 done
 
 #python edge_prediction_transfer.py --checkpoint edge-views-all.pt --epochs 4 --backbone gin --batch_size 512 -f

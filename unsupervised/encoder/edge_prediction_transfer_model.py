@@ -95,7 +95,10 @@ class EdgePredictionTransferModel(torch.nn.Module):
 		# 				Linear(2 * proj_hidden_dim, output_dim))
 		# self.output_layer = GINEConv(nn)
 
-		self.output_layer = Linear(2 * proj_hidden_dim, 1)
+		self.output_layer = Sequential(Linear(2*self.input_proj_dim, proj_hidden_dim), ReLU(inplace=True),
+									   Linear(proj_hidden_dim, 1))
+
+		# self.output_layer = Linear(2 * proj_hidden_dim, 1)
 		self.sigmoid_out = Sigmoid()
 
 

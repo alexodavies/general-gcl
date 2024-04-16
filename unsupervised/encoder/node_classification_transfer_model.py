@@ -136,7 +136,10 @@ class NodeClassificationTransferModel(torch.nn.Module):
 		# else:
 		# 	raise NotImplementedError
 
-		self.output_layer = Linear(proj_hidden_dim, output_dim)
+		self.output_layer = Sequential(Linear(self.input_proj_dim, proj_hidden_dim), ReLU(inplace=True),
+									   Linear(proj_hidden_dim, output_dim))
+
+		# self.output_layer = Linear(proj_hidden_dim, output_dim)
 
 
 		# bn = torch.nn.BatchNorm1d(emb_dim)
