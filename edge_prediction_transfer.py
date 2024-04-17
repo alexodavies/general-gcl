@@ -169,7 +169,7 @@ def fine_tune(model, checkpoint_path, val_data, test_data, name, n_epochs):
 
     train_loader = LinkNeighborLoader(
         data=val_data,
-        num_neighbors=[5,5,5],
+        num_neighbors=[-1, -1],
         neg_sampling_ratio=2.0,
         batch_size=512,
         shuffle=True,
@@ -177,7 +177,7 @@ def fine_tune(model, checkpoint_path, val_data, test_data, name, n_epochs):
 
     test_loader = LinkNeighborLoader(
         data=test_data,
-        num_neighbors=[5,5,5],
+        num_neighbors=[-1,-1],
         neg_sampling_ratio=2.0,
         batch_size=512,
         shuffle=True,
