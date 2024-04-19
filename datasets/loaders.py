@@ -48,7 +48,7 @@ def get_chemical_datasets(transforms, num, stage="train"):
 
     return datasets, names
 
-def get_social_datasets(transforms, num, stage = "train"):
+def get_social_datasets(transforms, num, stage = "train", exclude = None):
     if "original_datasets" not in os.listdir():
         os.mkdir("original_datasets")
 
@@ -60,6 +60,33 @@ def get_social_datasets(transforms, num, stage = "train"):
             transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
             transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num))]
         names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly"]
+
+        if exclude is None:
+            print(f"Not excluding any social datasets")
+            pass
+
+        elif isinstance(exclude, list):
+            print(f"Excluding {exclude} as list")
+            out_data, out_names = [], []
+
+            for iname, name in enumerate(names):
+                if name not in exclude:
+                    out_data.append(social_datasets[iname])
+                    out_names.append(name)
+
+        elif isinstance(exclude, str):
+            print(f"Excluding {exclude} as string")
+            out_data, out_names = [], []
+            for iname, name in enumerate(names):
+                if name not in [exclude]:
+                    out_data.append(social_datasets[iname])
+                    out_names.append(name)
+                else:
+                    print("Passing dataset")
+
+            social_datasets = out_data
+            names = out_names
+
     elif stage == "val":
         social_datasets = [
             transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
@@ -121,7 +148,10 @@ def get_random_datasets(transforms, num, stage = "train"):
 
     return social_datasets, names
 
-def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], num_social = 50000):
+def get_train_loader(batch_size, transforms,
+                     subset = ["chemical", "social"],
+                     num_social = 50000,
+                     social_excludes = None):
     """
     Prepare a torch concat dataset dataloader
     Args:
@@ -140,14 +170,16 @@ def get_train_loader(batch_size, transforms, subset = ["chemical", "social"], nu
         datasets = []
 
     if "social" in subset:
-        social_datasets, _ = get_social_datasets(transforms, num_social, stage="train")
+        social_datasets, _ = get_social_datasets(transforms, num_social, stage="train", exclude=social_excludes)
     else:
         print("Skipping socials")
         social_datasets = []
     print(subset)
+
     if subset == ["dummy", "dummy"]:
         datasets, _ = get_random_datasets(transforms, num_social, stage = "train")
         social_datasets = []
+
     print(datasets, social_datasets)
     datasets += social_datasets
     combined = []
@@ -193,7 +225,6 @@ def get_val_loaders(batch_size, transforms, num = 5000):
     Get a list of validation loaders
 
     Args:
-        dataset: the -starting dataset-, a hangover from previous code, likely to be gone in the next refactor
         batch_size: batch size for loaders
         transforms: a set of transforms applied to the data
         num: the maximum number of samples in each dataset (and therefore dataloader)

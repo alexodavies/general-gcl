@@ -299,6 +299,13 @@ def run(args):
     molecules = not args.no_molecules
     socials = not args.no_socials
 
+    excludes = args.exclude if args.exclude != "None" else None
+    print(f"excluding {excludes}")
+    if excludes is not None:
+        wandb.log({"Social-Ablation":True})
+    else:
+        wandb.log({"Social-Ablation": False})
+
 
     print(f"Chemicals: {molecules}, Socials: {socials}")
 
@@ -309,7 +316,7 @@ def run(args):
                       "social" if socials else "dummy"]
 
     print(f"Passing subset: {dataset_subset}")
-    dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset)
+    dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset, social_excludes=excludes)
 
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
@@ -380,7 +387,7 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
-        if epoch % 10 == 0:
+        if epoch % 25 == 0:
 
             if args.proj_dim != 1:
                 general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
@@ -391,8 +398,8 @@ def run(args):
                 'encoder_optimizer_state_dict': model_optimizer.state_dict(),
                 'view_state_dict': None if random_dropping else view_learner.state_dict(),
                 'view_optimizer_state_dict': None if random_dropping else view_optimizer.state_dict()},
-                f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
-            wandb.save(f"{wandb.run.dir}/Sweep-emb-{args.emb_dim}-epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
+                f"{wandb.run.dir}/Epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
+            wandb.save(f"{wandb.run.dir}/Epoch-{epoch}{'-random_dropping' if random_dropping else ''}.pt")
 
 
 def arg_parse():
@@ -468,6 +475,10 @@ def arg_parse():
         '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
     )
 
+    parser.add_argument(
+        '--exclude', type = str, default='None', help = 'Which social dataset to exclude (for ablation study) ("facebook_large", "twitch_egos", "cora", "roads", "fruit_fly")'
+    )
+
     parser.add_argument('--seed', type=int, default=0)
 
     return parser.parse_args()
@@ -481,13 +492,16 @@ if __name__ == '__main__':
         name = "chem"
     elif args.no_molecules and not args.no_socials:
         name = "social"
+        if args.exclude != "None":
+            name = f"{args.exclude}-excluded-social"
     elif args.no_molecules and args.no_socials:
         name = "random"
+
     else:
         name = "all"
 
 
     # Change to offline=False to track model training with weights and biases
-    args = setup_wandb(args, name = name + '_' + args.backbone, offline=False)
+    args = setup_wandb(args, name = name + '-' + args.backbone, offline=False)
     run(args)
 
