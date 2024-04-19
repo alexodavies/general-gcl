@@ -62,7 +62,7 @@ class GenericNodeEncoder(torch.nn.Module):
 class Encoder(torch.nn.Module):
 	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
 				 pooling_type="standard", is_infograph=False,
-				 convolution = GINEConv, edge_dim = 1):
+				 convolution = "gin", edge_dim = 1):
 		super(Encoder, self).__init__()
 
 		self.pooling_type = pooling_type
