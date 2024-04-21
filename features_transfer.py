@@ -29,9 +29,6 @@ from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from unsupervised.encoder import TransferModel, FeaturedTransferModel
-
-from feature_model import FeatureEncoder
-
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 from torch_geometric.transforms import NormalizeFeatures
 
