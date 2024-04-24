@@ -14,26 +14,23 @@ https://github.com/susheels/adgcl
 
 import argparse
 import logging
-import random
-
-import wandb
-from tqdm import tqdm
 import os
+import random
 
 import numpy as np
 import torch
+import wandb
 from torch_geometric.transforms import Compose
 from torch_scatter import scatter
+from tqdm import tqdm
 
-from utils import setup_wandb
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
-
-
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
+from utils import setup_wandb
 
 
 def warn(*args, **kwargs):
