@@ -30,14 +30,15 @@ from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from unsupervised.encoder import TransferModel
 from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression, LinearRegression
+from  sklearn.preprocessing import normalize
 
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
 
 
-def warn(*args, **kwargs):
-    pass
-import warnings
-warnings.warn = warn
+# def warn(*args, **kwargs):
+#     pass
+# import warnings
+# warnings.warn = warn
 
 
 def setup_seed(seed):
@@ -227,6 +228,10 @@ def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embed
     val_targets = np.array(val_targets)[shuffle_inds]
     val_embeddings = val_embeddings[shuffle_inds, :]
 
+    # val_embeddings = torch.norm(val_embeddings)
+    val_embeddings = normalize(val_embeddings)
+    test_embeddings = normalize(test_embeddings)
+
     test_targets = get_targets(test_loader)
 
     num_val = val_targets.shape[0]
@@ -247,9 +252,9 @@ def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embed
         split_targets = split_targets[~nan_indices]
 
         if task == "classification":
-            lin_model = LogisticRegression(dual=False, fit_intercept=True)
+            lin_model = LogisticRegression(dual=False, fit_intercept=True, max_iter = 5000)
         elif task == "regression":
-            lin_model = LinearRegression()  # Ridge(fit_intercept=True, copy_X=True)
+            lin_model = Ridge(fit_intercept=True, copy_X=True, normalize = True) # LinearRegression()  # Ridge(fit_intercept=True, copy_X=True)
         # try:
         # print(split_targets, task)
         lin_model.fit(split_embeddings, split_targets)
@@ -257,8 +262,11 @@ def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embed
         scores += [score_fn(test_targets, pred)]
         # except:
         #     pass
+    print(f"{model_name} & {name} & {np.mean(scores)} & {np.std(scores)}")
+    wandb.log({f"{name}/model-mean": np.mean(scores),
+               f"{name}/model-dev": np.std(scores)})
 
-    print(f"{model_name} & {name} &  {reindex(np.mean(scores), np.std(scores))} \\\\")
+    # print(f"{model_name} & {name} &  {reindex(np.mean(scores), np.std(scores))} \\\\")
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -266,7 +274,7 @@ def run(args):
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
-    wandb.log({"Transfer":True})
+    wandb.log({"Transfer":True, "Linear_Transfer":True})
     # setup_seed(args.seed)
 
     num = args.num
@@ -315,7 +323,7 @@ def run(args):
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
-    checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt"]
+    checkpoints = ["untrained", "social-100.pt", "chem-100.pt", "all-100.pt", "edge-views-all.pt"]
     # percentiles = [10., 10., 10., 0.5]
     for i_ax, checkpoint in enumerate(checkpoints):
 
