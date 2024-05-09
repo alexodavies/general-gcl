@@ -54,7 +54,6 @@ Arguments specific to FoToM are as follows:
 Models can be downloaded through `download_models.sh`.
 We include several pre-trained models:
 
-|-|-|-|-|
 | Checkpoint name | Backbone | Contrastive Method | Pre-Train Data |
 |-|-|-|-|
 | all-100.pt | GIN | AD-GCL | All |
