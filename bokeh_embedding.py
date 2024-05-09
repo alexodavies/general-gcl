@@ -1,3 +1,9 @@
+"""
+Code to produce a bokeh dashboard of embeddings from a trained model
+Mostly used for visualising the embeddings of a model trained on multiple datasets
+Not mentioned in ToP paper
+"""
+
 import argparse
 import concurrent.futures
 import glob

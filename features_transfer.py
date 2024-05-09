@@ -1,10 +1,25 @@
+"""
+Anonymous authors, 2023/24
+
+Script for fine-tuning encoders on our validation datasets with full node and edge features.
+This is achieved using FeaturedTransferModel, defined in unsupervised/encoder/featured_transfer_model.py.
+
+Large sections are from the AD-GCL paper:
+
+Susheel Suresh, Pan Li, Cong Hao, Georgia Tech, and Jennifer Neville. 2021.
+Adversarial Graph Augmentation to Improve Graph Contrastive Learning.
+
+In Advances in Neural Information Processing Systems,
+Vol. 34. 15920–15933.
+https://github.com/susheels/adgcl
+"""
+
+
 import argparse
-import concurrent.futures
 import glob
 import logging
 import os
 import random
-from datetime import datetime
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -17,20 +32,16 @@ import wandb
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
-from utils import better_to_nx, setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
-from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
+from datasets.loaders import get_val_loaders, get_test_loaders
 
 
-from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
+from sklearn.metrics import roc_auc_score, mean_squared_error
 
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
 from unsupervised.encoder import Encoder
-from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
-from unsupervised.view_learner import ViewLearner
-from unsupervised.encoder import TransferModel, FeaturedTransferModel
-from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
-from torch_geometric.transforms import NormalizeFeatures
+from unsupervised.encoder import FeaturedTransferModel
+from torch.nn import MSELoss, BCELoss, Sigmoid
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -50,6 +61,20 @@ def setup_seed(seed):
 
 
 def tidy_labels(labels):
+    """
+    Tidies up the given labels by converting them into a consistent format.
+
+    Args:
+        labels (list or numpy.ndarray): The input labels to be tidied.
+
+    Returns:
+        numpy.ndarray: The tidied labels.
+
+    Raises:
+        None
+
+    """
+
     if type(labels[0]) is not list:
         if np.sum(labels) == np.sum(np.array(labels).astype(int)):
             labels = np.array(labels).astype(int)
@@ -74,6 +99,17 @@ def tidy_labels(labels):
         return np.array(labels)
 
 def get_task_type(loader, name):
+    """
+    Determine the task type based on the data loader and dataset name.
+
+    Args:
+        loader (torch.utils.data.DataLoader): The data loader.
+        name (str): The name of the dataset.
+
+    Returns:
+        str: The task type, which can be "empty", "classification", or "regression".
+    """
+
     val_targets = []
     for i_batch, batch in enumerate(loader):
         if batch.y is None or name == "ogbg-molpcba" or name == "blank":
@@ -104,6 +140,24 @@ def get_task_type(loader, name):
     return task
 
 def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
+    """
+    Evaluates a model on a test dataset.
+
+    Args:
+        model (torch.nn.Module): The model to evaluate.
+        test_loader (torch.utils.data.DataLoader): The test data loader.
+        score_fn (callable): The scoring function to evaluate the model's predictions.
+        out_fn (callable): The output function to apply to the model's predictions.
+        loss_fn (callable): The loss function to calculate the model's loss.
+        task (str): The task type, either "classification" or "regression".
+
+    Returns:
+        tuple: A tuple containing the evaluation score and the loss.
+
+    Raises:
+        Exception: If an error occurs during evaluation.
+
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.eval()
     with torch.no_grad():
@@ -134,7 +188,27 @@ def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
         return score_fn(ys, y_preds), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
 
 
-def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n_epochs = 50):
+def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_epochs=50):
+    """
+    Fine-tunes a given model using the provided data loaders and hyperparameters.
+
+    Args:
+        model (torch.nn.Module): The model to be fine-tuned.
+        checkpoint_path (str): The path to the checkpoint file for the model.
+        val_loader (torch.utils.data.DataLoader): The data loader for the validation set.
+        test_loader (torch.utils.data.DataLoader): The data loader for the test set.
+        name (str, optional): The name of the model. Defaults to "blank".
+        n_epochs (int, optional): The number of epochs for training. Defaults to 50.
+
+    Returns:
+        tuple: A tuple containing the following elements:
+            - train_losses (list): The list of training losses for each epoch.
+            - val_losses (list): The list of validation losses for each epoch.
+            - final_score (float): The final score of the model on the test set.
+            - best_epoch (int): The epoch number with the best validation loss.
+            - best_val_loss (float): The best validation loss achieved during training.
+    """
+
     # At the moment this is rigid to single-value predictions
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -216,6 +290,17 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name = "blank", n
 
 
 def run(args):
+    """
+    Run the transfer learning process for a given model checkpoint.
+
+    Args:
+        args: The command line arguments.
+
+    Returns:
+        None
+    """
+
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info("Using Device: %s" % device)
