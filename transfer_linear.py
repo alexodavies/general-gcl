@@ -4,42 +4,29 @@ import glob
 import logging
 import os
 import random
-from datetime import datetime
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import torch
 import yaml
 import wandb
 
 from torch_geometric.transforms import Compose
-from tqdm import tqdm
 
-from utils import better_to_nx, setup_wandb, wandb_cfg_to_actual_cfg
-from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from utils import setup_wandb, wandb_cfg_to_actual_cfg
+from datasets.loaders import get_val_loaders, get_test_loaders
 
 
-from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error
+from sklearn.metrics import roc_auc_score, mean_squared_error
 
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
+from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
-from unsupervised.encoder import TransferModel
-from sklearn.linear_model import Ridge, RidgeClassifier, LogisticRegression, LinearRegression
+from sklearn.linear_model import Ridge, LogisticRegression
 from  sklearn.preprocessing import normalize
 
 from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
-
-
-# def warn(*args, **kwargs):
-#     pass
-# import warnings
-# warnings.warn = warn
-
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -228,7 +215,6 @@ def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embed
     val_targets = np.array(val_targets)[shuffle_inds]
     val_embeddings = val_embeddings[shuffle_inds, :]
 
-    # val_embeddings = torch.norm(val_embeddings)
     val_embeddings = normalize(val_embeddings)
     test_embeddings = normalize(test_embeddings)
 
@@ -255,18 +241,14 @@ def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embed
             lin_model = LogisticRegression(dual=False, fit_intercept=True, max_iter = 5000)
         elif task == "regression":
             lin_model = Ridge(fit_intercept=True, copy_X=True, normalize = True) # LinearRegression()  # Ridge(fit_intercept=True, copy_X=True)
-        # try:
-        # print(split_targets, task)
+
         lin_model.fit(split_embeddings, split_targets)
         pred = lin_model.predict(test_embeddings)
         scores += [score_fn(test_targets, pred)]
-        # except:
-        #     pass
+
     print(f"{model_name} & {name} & {np.mean(scores)} & {np.std(scores)}")
     wandb.log({f"{name}/model-mean": np.mean(scores),
                f"{name}/model-dev": np.std(scores)})
-
-    # print(f"{model_name} & {name} &  {reindex(np.mean(scores), np.std(scores))} \\\\")
 
 def run(args):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -280,9 +262,6 @@ def run(args):
     num = args.num
     checkpoint = args.checkpoint
     evaluation_node_features = args.node_features
-
-
-
 
     if checkpoint == "latest":
         checkpoint_root = "wandb/latest-run/files"
@@ -380,13 +359,6 @@ def run(args):
             test_embedding = test_separate_embeddings[i_embedding]
             name = names[i_embedding]
             linear_validation(model, checkpoint_path, val_loader, test_loader, embedding, test_embedding, name)
-
-            # def linear_validation(model, checkpoint_path, val_loader, test_loader, val_embeddings, test_embeddings,
-            #                       name="blank"):
-
-
-
-
 
 def arg_parse():
     parser = argparse.ArgumentParser(description='AD-GCL ogbg-mol*')

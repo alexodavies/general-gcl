@@ -1,19 +1,24 @@
 """
-Very much work-in-progress
+Anonymous authors, 2023/24
+
+Script for fine-tuning encoders on node-classification tasks
+
+Large sections are from the AD-GCL paper:
+
+Susheel Suresh, Pan Li, Cong Hao, Georgia Tech, and Jennifer Neville. 2021.
+Adversarial Graph Augmentation to Improve Graph Contrastive Learning.
+
+In Advances in Neural Information Processing Systems,
+Vol. 34. 15920–15933.
+https://github.com/susheels/adgcl
 """
 
 
 import argparse
-import concurrent.futures
 import glob
 import logging
 import os
 import random
-from datetime import datetime
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import torch
 import yaml
@@ -22,27 +27,18 @@ import wandb
 from torch_geometric.transforms import Compose, NormalizeFeatures
 from tqdm import tqdm
 
-from utils import better_to_nx, setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
-from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
+from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
 
+from sklearn.metrics import accuracy_score
 
-from sklearn.metrics import f1_score, roc_auc_score, mean_squared_error, accuracy_score, precision_score, recall_score
-
-from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation, TargetEvaluation
 from unsupervised.encoder import Encoder
-from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
-from unsupervised.view_learner import ViewLearner
-from unsupervised.encoder import TransferModel, FeaturedTransferModel, NodeClassificationTransferModel
+from unsupervised.encoder import NodeClassificationTransferModel
 
-from torch.nn import MSELoss, BCELoss, Softmax, Sigmoid
-
-from torch_geometric.datasets import Planetoid, FacebookPagePage, Amazon, WikipediaNetwork, GitHub, LastFMAsia
+from torch_geometric.datasets import Planetoid, GitHub, LastFMAsia
 from sklearn.model_selection import train_test_split
 from torch_geometric.loader import LinkNeighborLoader
-from torch_geometric.sampler import NeighborSampler, NodeSamplerInput
-from torch_geometric.data import DataLoader, Data
-from torch_geometric.utils import train_test_split_edges, to_undirected
+from torch_geometric.data import Data
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -58,93 +54,6 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
     np.random.seed(seed)
     random.seed(seed)
-
-
-
-def tidy_labels(labels):
-    if type(labels[0]) is not list:
-        if np.sum(labels) == np.sum(np.array(labels).astype(int)):
-            labels = np.array(labels).astype(int)
-        else:
-            labels = np.array(labels)
-        return labels
-
-    # Could be lists of floats
-    elif type(labels[0][0]) is float:
-        return np.array(labels)
-
-    # Possibility of one-hot labels
-    elif np.sum(labels[0][0]) == 1 and type(labels[0][0]) is int:
-
-        new_labels = []
-        for label in labels:
-            new_labels.append(np.argmax(label))
-
-        return np.array(new_labels)
-
-    else:
-        return np.array(labels)
-
-def get_task_type(loader, name):
-    val_targets = []
-    for i_batch, batch in enumerate(loader):
-        if batch.y is None or name == "ogbg-molpcba" or name == "blank":
-            task = "empty"
-            n_samples = 0
-            return task
-
-        else:
-            selected_y = batch.y
-            if type(selected_y) is list:
-                selected_y = torch.Tensor(selected_y)
-
-            if selected_y.dim() > 1:
-                selected_y = [selected_y[i, :].cpu().numpy().tolist() for i in range(selected_y.shape[0])]
-            else:
-                selected_y = selected_y.cpu().numpy().tolist()
-
-            val_targets += selected_y
-
-        break
-
-    val_targets = tidy_labels(val_targets).flatten()
-    if type(val_targets[0]) is int or type(val_targets[0]) is np.int64:
-        task = "classification"
-    else:
-        task = "regression"
-
-    return task
-
-def evaluate_model(model, test_loader, score_fn, out_fn, loss_fn, task):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.eval()
-    with torch.no_grad():
-        ys, y_preds = [], []
-        for batch in test_loader:
-            batch.to(device)
-            y_pred, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
-            y = batch.y
-
-            if type(y) is list:
-                y = torch.tensor(y).to(device)
-
-            if task == "classification":
-                y_pred = out_fn(y_pred).flatten()
-                if y.dim() > 1:
-                    y = y[:, 0]
-                y = y.to(y_pred.dtype)
-
-            y_pred = y_pred.cpu().numpy().tolist()
-            y = y.cpu().numpy().tolist()
-
-            ys += y
-            y_preds += y_pred
-    model.train()
-    try:
-        return score_fn(ys, y_preds, squared=False), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
-    except:
-        return score_fn(ys, y_preds), loss_fn(torch.tensor(ys), torch.tensor(y_preds))
-
 
 def generate_node_masks(data, test_size=0.2, random_state=None):
     """
@@ -175,6 +84,35 @@ def generate_node_masks(data, test_size=0.2, random_state=None):
 
 
 def create_data_loaders(graph, train_ratio=0.8, batch_size=64, num_neighbors=[10]):
+    """
+    Create train and test data loaders for node classification tasks.
+
+    Parameters:
+        graph (torch_geometric.data.Data): The input graph data object.
+        train_ratio (float, optional): The ratio of nodes to be included in the training set.
+                                       Defaults to 0.8.
+        batch_size (int, optional): The batch size for data loading. Defaults to 64.
+        num_neighbors (list of int, optional): The number of neighbors to sample for each node.
+                                                Defaults to [10].
+
+    Returns:
+        train_loader (LinkNeighborLoader): Data loader for the training set.
+        test_loader (LinkNeighborLoader): Data loader for the test set.
+
+    Notes:
+        - The input graph should be an instance of torch_geometric.data.Data.
+        - The function creates train and test masks based on the specified train_ratio.
+        - It initializes LinkNeighborLoader objects for both training and testing data,
+          which are used for neighbor sampling during node classification tasks.
+        - LinkNeighborLoader is a custom data loader designed for node classification tasks,
+          capable of sampling node features and their corresponding neighbors efficiently.
+
+    Example:
+        # Assuming 'graph' is a torch_geometric.data.Data object
+        train_loader, test_loader = create_data_loaders(graph, train_ratio=0.8,
+                                                         batch_size=64, num_neighbors=[10])
+    """
+
     # Convert to undirected graph
     # graph = to_undirected(graph)
 
@@ -200,6 +138,42 @@ def create_data_loaders(graph, train_ratio=0.8, batch_size=64, num_neighbors=[10
     return train_loader, test_loader
 
 def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
+    """
+    Fine-tune a given model using transfer learning on a dataset for node classification tasks.
+
+    Parameters:
+        model (torch.nn.Module): The model to be fine-tuned.
+        checkpoint_path (str): The path to the checkpoint file for loading pre-trained weights.
+                               If "untrained", the model is initialized without pre-trained weights.
+        dataset (torch_geometric.datasets): The dataset for node classification.
+        name (str): The name of the model for saving checkpoints and results.
+        n_epochs (int): The number of epochs for fine-tuning.
+
+    Returns:
+        train_losses (list): List of training losses for each epoch.
+        val_losses (list): List of validation losses for each epoch.
+        max_train_score (float): Maximum accuracy achieved on the training set during fine-tuning.
+        max_val_score (float): Maximum accuracy achieved on the validation set during fine-tuning.
+        min_val_loss (float): Minimum loss achieved on the validation set during fine-tuning.
+
+    Notes:
+        - The function fine-tunes a given model on a dataset for node classification tasks.
+        - If a checkpoint path is provided, pre-trained weights are loaded into the model.
+        - The training and validation datasets are split using a train-test split ratio defined in the dataset.
+        - The model is trained using the Adam optimizer and cross-entropy loss.
+        - Training progress is monitored using training and validation losses and accuracy scores.
+        - The function returns lists of training losses, validation losses, and accuracy scores,
+          along with the maximum training and validation accuracy scores and the minimum validation loss.
+        - The model checkpoints and results are saved with the specified name for further analysis.
+
+    Example:
+        # Assuming 'model' is a torch.nn.Module, 'checkpoint_path' points to a pre-trained checkpoint,
+        # 'dataset' is a torch_geometric.datasets object, 'name' is a string, and 'n_epochs' is an integer.
+        train_losses, val_losses, max_train_score, max_val_score, min_val_loss = fine_tune(
+            model, checkpoint_path, dataset, name, n_epochs
+        )
+    """
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model_name = checkpoint_path.split("/")[-1].split(".")[0]
@@ -211,50 +185,13 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
 
     model.to(device)
-
-    # train_loader = LinkNeighborLoader(
-    #     data=dataset,
-    #     num_neighbors=[10, 10],
-    #     neg_sampling_ratio=2.0,
-    #     batch_size=512,
-    #     shuffle=True,
-    # )
-
-    # sampler = NeighborSampler(dataset.data,
-    #                           [10,10],
-    #                           directed = False)
-    #
-    # seed_nodes = torch.randint(1, dataset.data.num_nodes, (1000,))
-    # sampler_input = NodeSamplerInput(node=seed_nodes)
-    #
-    # sampled_graphs = sampler.sample_from_nodes(sampler_input)
-    #
-    # print(sampled_graphs)
-    # train, test = train_test_split(sampled_graphs, test_size=0.2, shuffle = True)
-    #
-    #
-    # batch_size = 64
-    # train_loader = DataLoader(train, batch_size=batch_size)
-    # test_loader = DataLoader(test, batch_size=batch_size)
-
     train_loader, test_loader = create_data_loaders(dataset.data, num_neighbors=[5,5,5])
-
-
-
-
-    try:
-        train_mask = dataset.train_mask
-        test_mask = dataset.test_mask
-    except AttributeError:
-        train_mask, test_mask = generate_node_masks(dataset)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss()
 
     model.train()
     optimizer.zero_grad()
-
-    score_fn = accuracy_score
 
     train_losses, val_losses, scores = [], [], []
     for i_epoch in tqdm(range(n_epochs), leave=False):
@@ -272,7 +209,6 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
             epoch_train_losses.append(loss.item())
             loss.backward()  # Derive gradients.
             optimizer.step()
-
 
 
         train_losses.append(np.mean(epoch_train_losses))
@@ -293,14 +229,6 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
     val_losses.append(np.mean(epoch_test_losses))
     scores.append(np.mean(epoch_scores))
 
-    #
-    # fig, ax = plt.subplots(figsize=(6,4))
-    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(train_losses)), train_losses, label = "Train")
-    # ax.plot(np.linspace(start = 0, stop = n_epochs, num=len(val_losses)), val_losses, label="Val")
-    # ax.legend(shadow=True)
-    # plt.savefig(f"outputs/{model_name}/{name}-node-classification.png")
-    # plt.close()
-
     return train_losses, val_losses, max(scores), max(scores), min(val_losses)
 
 
@@ -308,47 +236,45 @@ def fine_tune(model, checkpoint_path, dataset, name, n_epochs):
 
 
 def run(args):
+    """
+    Run node classification transfer learning experiments using pre-trained models.
+
+    Parameters:
+        args (argparse.Namespace): Command-line arguments containing experiment configuration.
+
+    Returns:
+        None
+
+    Notes:
+        - This function orchestrates the process of running node classification transfer learning experiments.
+        - It initializes the experiment environment, including setting up logging and determining the device for computation.
+        - Depending on the provided arguments, it loads pre-trained models or initializes untrained models.
+        - It sets up datasets for validation, including GitHub, LastFMAsia, and Planetoid datasets.
+        - The function conducts experiments with multiple repetitions, fine-tuning models and evaluating their performance.
+        - It logs the results using Weights & Biases (wandb) for monitoring and analysis.
+    """
+    
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
 
-    # setup_seed(args.seed)
-
-    num = args.num
     checkpoint = args.checkpoint
     evaluation_node_features = args.node_features
     print(f"\n\nNode features: {evaluation_node_features}\n\n")
     num_epochs = int(args.epochs)
     print(f"Num epochs: {num_epochs}")
 
-    checkpoint_path = f"outputs/{checkpoint}"
-
     # Get datasets
     my_transforms = Compose([initialize_edge_weight, NormalizeFeatures()])
-    # test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
-    # model_name = checkpoint_path.split("/")[-1].split(".")[0]
 
-    # val_loaders = [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Cora", "Citeseer", "PubMed"]]
-    # names = ["Cora", "Citeseer", "PubMed"]
-
-    # test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
-    # model_name = checkpoint_path.split("/")[-1].split(".")[0]
     val_loaders = []
-    val_loaders += [ # FacebookPagePage(root='original_datasets/FacebookPagePage', transform=my_transforms),
+    val_loaders += [
                     GitHub(root='original_datasets/GitHub', transform=my_transforms),
                     LastFMAsia(root='original_datasets/LastFM', transform=my_transforms)]
-    # val_loaders += [Amazon(root='original_datasets/Amazon', name=name, transform=my_transforms) for name in ["Computers", "Photo"]]
     val_loaders += [Planetoid(root='original_datasets/Planetoid', name=name, transform=my_transforms) for name in ["Citeseer", "PubMed"]]
     names = ["GitHub", "LastFM",  "Citeseer", "PubMed"]
-
-    print(val_loaders[0].y, val_loaders[0].y.shape)
-
-
-
 
     if checkpoint == "latest":
         checkpoint_root = "wandb/latest-run/files"
@@ -389,35 +315,20 @@ def run(args):
     wandb.log({"Model Name": model_name + "-features" if evaluation_node_features else model_name})
 
 
-
-
-
     for i in range(len(val_loaders)):
         val_loader = val_loaders[i]
-        # test_loader = test_loaders[i]
         name = names[i]
         print(f"Name: {name}")
 
         if name not in os.listdir("outputs"):
             os.mkdir(f"outputs/{name}")
 
-        # if name in ["ogbg-molpcba"]:
-        #     continue
-        #
-        # if "ogbg" not in name:
-        #     continue
-
         n_repeats = 10
 
         best_pretrain_score = 0.
-        best_untrain_score = 0.
-        # best_default_score = 1.e07
 
         pretrain_val = np.zeros((n_repeats, num_epochs))
-        untrain_val = np.zeros((n_repeats, num_epochs))
-        # default_val = np.zeros((n_repeats, num_epochs))
         pretrain_scores = []
-        untrain_scores = []
 
         pbar = tqdm(range(n_repeats))
         for n in pbar:
@@ -431,130 +342,26 @@ def run(args):
                                                                                                                                     val_loader,
                                                                                                                                     name = name,
                                                                                                                                     n_epochs=num_epochs)
-            # model = NodeClassificationTransferModel(
-            #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution = args.backbone),
-            #     proj_hidden_dim=args.emb_dim, output_dim=val_loader.num_classes, features=evaluation_node_features,
-            #     node_feature_dim=val_loader.num_features, edge_feature_dim=1).to(device)
-            #
-            # untrain_train_losses, untrain_val_losses, untrain_val_score, untrain_best_epoch,untrain_best_val_loss = fine_tune(model,
-            #                                                                                                                   "untrained",
-            #                                                                                                                   val_loader,
-            #                                                                                                                   name = name,
-            #                                                                                                                   n_epochs=num_epochs)
-            #
-            # model = TransferModel(
-            #     Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
-            #             pooling_type=args.pooling_type),
-            #     proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
-            # default_train_losses, default_val_losses, default_val_score, default_best_epoch, default_best_val_loss = fine_tune(model,
-            #                                                                                                                   checkpoint_path,
-            #                                                                                                                   val_loader,
-            #                                                                                                                   test_loader,
-            #                                                                                                                   name = name,
-            #                                                                                                                   n_epochs=num_epochs)
 
             pretrain_val[n, :] = pretrain_val_losses
-            # untrain_val[n, :] = untrain_val_losses
-            # default_val[n, :] = default_val_losses
 
             scores = "Pretrain:" + str(pretrain_val_score)[:5] #  + "  Untrain:" + str(untrain_val_score)[:5] # + "default:  " +  str(default_val_score)[:5]
             pbar.set_description(scores)
 
             pretrain_scores.append(pretrain_val_score)
-            # untrain_scores.append(untrain_val_score)
-            # default_scores.append(default_val_score)
 
             if pretrain_val_score >= best_pretrain_score:
                 best_pretrain_score = pretrain_val_score
-            # if untrain_val_score >= best_untrain_score:
-            #     best_untrain_score = untrain_val_score
-            # if default_val_score <= best_default_score:
-            #     best_default_score = default_val_score
 
-        # untrain_val_score = str(best_untrain_score)[:6]
         pretrain_val_score = str(best_pretrain_score)[:6]
-        # default_val_score = str(best_default_score)[:6]
-
-        pretrain_val_loss_mean = np.mean(pretrain_val, axis=0)
-        # untrain_val_loss_mean = np.mean(untrain_val, axis=0)
-        # default_val_loss_mean = np.mean(default_val, axis=0)
-
-        pretrain_val_loss_max = np.max(pretrain_val, axis=0)
-        # untrain_val_loss_max = np.max(untrain_val, axis=0)
-        # default_val_loss_max = np.max(default_val, axis=0)
-
-        pretrain_val_loss_min = np.min(pretrain_val, axis=0)
-        # untrain_val_loss_min = np.min(untrain_val, axis=0)
-        # default_val_loss_min = np.min(default_val, axis=0)
 
         pretrain_mean_score = str(np.mean(pretrain_scores))[:5]
-        # untrain_mean_score = str(np.mean(untrain_scores))[:5]
-        # default_mean_score = str(np.mean(default_scores))[:5]
 
         pretrain_dev_score = str(np.std(pretrain_scores))[:5]
-        # untrain_dev_score = str(np.std(untrain_scores))[:5]
-        # default_dev_score = str(np.std(default_scores))[:5]
-
-        # fig, ax = plt.subplots(figsize=(6, 4))
-
 
         wandb.log({f"{name}-node-class/model-mean": float(pretrain_mean_score),
                    f"{name}-node-class/model-dev": float(pretrain_dev_score),
                    f"{name}-node-class/model-best": float(pretrain_val_score)})
-        #
-        #
-        # # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
-        # #         default_val_loss_max,
-        # #         default_val_loss_min,
-        # #         alpha = 0.5,
-        # #         color = "orange")
-        # #
-        # #
-        # # ax.plot(np.linspace(start = 0, stop = num_epochs, num=default_val_loss_mean.shape[0]),
-        # #         default_val_losses,
-        # #         label=f"Default, Score: {default_mean_score} +/- {default_dev_score},  Best: {default_val_score}",
-        # #         c = "orange")
-        # #
-        # # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-        # #         untrain_val_loss_max,
-        # #         untrain_val_loss_min,
-        # #         alpha = 0.5,
-        # #         color = "blue")
-        # #
-        # # ax.plot(np.linspace(start = 0, stop = num_epochs, num=untrain_val_loss_mean.shape[0]),
-        # #         untrain_val_losses,
-        # #         label=f"From-Scratch, Score: {untrain_mean_score} +/- {untrain_dev_score},  Best: {untrain_val_score}",
-        # #         c = "blue")
-        #
-        #
-        #
-        # ax.fill_between(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-        #         pretrain_val_loss_max,
-        #         pretrain_val_loss_min,
-        #         alpha = 0.5,
-        #         color = "green")
-        #
-        # ax.plot(np.linspace(start = 0, stop = num_epochs, num=pretrain_val_loss_mean.shape[0]),
-        #         pretrain_val_losses,
-        #         label=f"Pre-Trained w/Features ({model_name}), Score: {pretrain_mean_score} +/- {pretrain_dev_score},  Best: {pretrain_val_score}",
-        #         c = "green")
-        #
-        # ax.legend(loc = "upper right", shadow=True)
-        # ax.set_xlabel("Epoch")
-        # ax.set_ylabel("Validation Loss")
-        # # ax.set_title(name)
-        #
-        # ax.set_yscale('log')
-        #
-        # plt.tight_layout()
-        #
-        # features_string_tag = "feats" if evaluation_node_features else "no-feats"
-        # plt.savefig(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")
-        # wandb.log({f"{name}-node-class/": wandb.Image(f"outputs/{name}/{name}-{model_name}-{features_string_tag}-node-classification.png")})
-        # plt.close()
-
-
-
 
 def arg_parse():
     parser = argparse.ArgumentParser(description='AD-GCL ogbg-mol*')

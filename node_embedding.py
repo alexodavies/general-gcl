@@ -1,3 +1,9 @@
+"""
+Code for analysing embeddings without fine-tuning.
+Mostly redundant, producing figures and a dataframe.
+See train and transfer files for more thorough documentation.
+"""
+
 import argparse
 import concurrent.futures
 import glob
