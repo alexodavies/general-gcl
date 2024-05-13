@@ -4,10 +4,6 @@ Repository for the paper **Towards Generalised Pre-Training of Graph Models**, p
 
 ### Abstract:
 
-Models**, presenting the **T**opology **O**nly **P**re-training (**ToP**).
-
-### Abstract:
-
 The principal benefit of unsupervised representation learning is that a pre-trained model can be fine-tuned where data or labels are scarce.
 Existing approaches for graph representation learning are domain specific, maintaining consistent node and edge attributes across the pre-training and target datasets.
 This has precluded transfer to multiple domains.
@@ -20,6 +16,34 @@ On 75% of experiments, **ToP** performs significantly better than a supervised b
 The remaining cases show equal performance to the baseline. 
 Contrary to other research, pre-training with **ToP** on a dataset with the target domain excluded leads us to better performance than pre-training on a dataset from only the target domain.
 The multi-domain model at worst, matches, and on 75% of tasks, significantly outperforms single-domain (p <= 0.01).
+
+### Reproducing our Results
+
+Experimental details can be found in the ToP paper.
+Default parameters in-code match those used in our experiments, and key-word arguments (see below) can be used to change experimental setup if necessary.
+
+Training the ToP-All model requires this command:
+
+``
+python train.py --epochs 100
+``
+
+Having pre-trained a model, the resulting checkpoints and config files can be found under `wandb/`.
+To perform transfer, first move `checkpoint.pt` and `config.yaml` to `outputs/`, and rename `config.yaml` to `checkpoint.yaml`.
+
+The transfer command is then (see below for further arguments):
+
+``
+python transfer.py --checkpoint checkpoint.pt
+``
+
+The same for transfer on molecular benchmarks with features:
+
+``
+python features_transfer.py --checkpoint checkpoint.pt -f
+``
+
+and the same syntax for node classification and edge classification.
 
 ## Code Usage
 
