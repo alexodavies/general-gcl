@@ -51,10 +51,14 @@ Arguments specific to FoToM are as follows:
 
 ## Models
 
-Models can be downloaded through `download_models.sh`.
+Models can be downloaded through https://drive.google.com/file/d/1Ionm2UsVLNpPmQdOiBBzGq_YjELllGeC/view?usp=sharing.
+This zip archive should be placed in the root directory, then unpacked with `unzip_models.sh`.
+
 We include several pre-trained models:
 
 | Checkpoint name | Backbone | Contrastive Method | Pre-Train Data |
+|-|-|-|-|
+| untrained | Specified with ``--backbone`` | None | None |
 |-|-|-|-|
 | all-100.pt | GIN | AD-GCL | All |
 | social-100.pt | GIN | AD-GCL | Non-Molecules |
@@ -89,11 +93,7 @@ Pre-trained models can be downloaded with `download_models.sh`.
 
  - `-f --node-features`       whether to use node labels during evaluation
  - `--num` the maximum number of samples to include in the test sets (doubled for validation)
- - `--checkpoint` the model checkpoint to fine-tune. We include the following:
- - - `all-100.pt` a model trained for 100 epochs on all the training data
- - - `chem-100.pt` a model trained for 100 epochs on only molecules
- - - `social-100.pt` a model trained for 100 epochs on on non-molecules
- - - `untrained` as a checkpoint will not load a checkpoint, instead training a model from scratch
+ - `--checkpoint` the model checkpoint to fine-tune. See above for included models.
 
 #### Linear Transfer
 
@@ -107,11 +107,7 @@ Pre-trained models can be downloaded with `download_models.sh`, see above.
 
  - `-f --node-features`       whether to use node (and edge) features during evaluation
  - `--num` the maximum number of samples to include in the test sets (doubled for validation)
- - `--checkpoint` the model checkpoint to fine-tune. We include the following:
- - - `all-100.pt` a model trained for 100 epochs on all the training data
- - - `chem-100.pt` a model trained for 100 epochs on only molecules
- - - `social-100.pt` a model trained for 100 epochs on on non-molecules
- - - `untrained` as a checkpoint will not load a checkpoint, instead training a model from scratch
+ - `--checkpoint` the model checkpoint to fine-tune. See above for included models.
  - `--backbone` Model backbone to use (gin, gcn, gat)
 
  ### Node and Edge Transfer
