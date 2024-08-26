@@ -1,4 +1,4 @@
-# FoToM
+# ToP
 
 Repository for the paper **Towards Generalised Pre-Training of Graph Models**, presenting the **T**opology **O**nly **P**re-training (**ToP**).
 
