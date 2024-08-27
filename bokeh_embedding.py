@@ -50,7 +50,6 @@ from datasets.neural_dataset import NeuralDataset
 from datasets.random_dataset import RandomDataset
 from datasets.road_dataset import RoadDataset
 from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
 
 
 
