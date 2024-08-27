@@ -46,6 +46,8 @@ from unsupervised.utils import initialize_edge_weight
 from unsupervised.encoder import FeaturedTransferModel
 from torch.nn import MSELoss, BCELoss, Sigmoid
 
+from hdbscan import HDBSCAN
+
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
 def warn(*args, **kwargs):
@@ -115,7 +117,10 @@ def get_embeddings(encoder, loaders):
 
     return all_embeddings, separate_embeddings
 
+def get_hdbscan_labels(embeddings):
+    labels = HDBSCAN(core_dist_n_jobs = 8, min_cluster_size=50, min_samples=50).fit_predict(embeddings)
 
+    return labels
 
 
 def run(args):
@@ -149,8 +154,8 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+    val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
 
     cmap = plt.get_cmap('tab20')
     unique_categories = np.unique(names)
@@ -163,6 +168,7 @@ def run(args):
     mol_color_dict = {category: color for category, color in zip(unique_categories, colors)}
 
     embedding_store = []
+    hdbscan_noise_props = []
 
     for i_check, checkpoint in enumerate(checkpoints):
 
@@ -201,11 +207,17 @@ def run(args):
         actual_name = actual_names[i_check]
 
         all_embeddings, separate_embeddings = get_embeddings(encoder.encoder, val_loaders)
+        hdbscan_labels = get_hdbscan_labels(all_embeddings)
+        
+        n_noise = np.sum(hdbscan_labels == -1)
+        prop_noise = np.around(n_noise / all_embeddings.shape[0], decimals=2)
+
+        hdbscan_noise_props.append(prop_noise)
 
         fig, ax = plt.subplots(figsize = (6,7))
-        ax.set_title(actual_names[i_check])
+        ax.set_title(f"{actual_names[i_check]} (DBN: {prop_noise})")
 
-        ump = UMAP(n_components = 2, n_neighbors=50, n_jobs=8).fit(all_embeddings)
+        ump = UMAP(n_components = 2, n_neighbors=20, n_jobs=8).fit(all_embeddings)
         projections = []
         for i_emb, embedding in enumerate(tqdm(separate_embeddings)):
             proj = ump.transform(embedding)
@@ -245,7 +257,7 @@ def run(args):
 
     
     # Create subplots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(ncols=2, nrows=2, figsize=(8, 6))
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(ncols=2, nrows=2, figsize=(8, 10))
     axes = [ax1, ax2, ax3, ax4]
 
     # Plot data
@@ -263,25 +275,12 @@ def run(args):
                 color = color_dict[name]
             scatter = ax.scatter(proj[:, 0], proj[:, 1], c=color, label=name, marker=plot_marker, s=2)
             handles_labels.append((scatter, name))
-        ax.set_title(actual_name)
+        ax.set_title(f"{actual_name} (DBN: {hdbscan_noise_props[i_check]})")
         ax.axis('off')
 
 
     # Get the legend handles and labels
     handles, labels = ax.get_legend_handles_labels()
-
-    # # Create a new legend with increased size for scatter points
-    # new_handles = []
-    # for ihandle, handle in enumerate(handles):
-    #     new_handle = plt.Line2D([0], [0],
-    #         marker="^" if "ogb" in labels[ihandle] else "o", color='w', markerfacecolor=handle.get_facecolor()[0], markersize=30)
-    #     new_handles.append(new_handle)
-
-    # Add legend to the axis
-    # ax.legend(handles=new_handles, labels=labels)
-
-    # ax.legend(handles = new_handles, labels = labels,
-        # shadow = True, bbox_to_anchor=(0.05, -0.2), loc='lower left', ncols = 3, frameon = False)
 
     # Collect unique labels and handles
     handles, labels = zip(*handles_labels)
@@ -298,11 +297,14 @@ def run(args):
         new_handles.append(new_handle)
 
     # Add the legend
-    # fig.legend(new_handles, unique_labels, loc='lower center', ncol=4, bbox_to_anchor=(0.5, 0.1), frameon = False)
-    fig.legend(new_handles, unique_labels, loc='center left', ncol=1, frameon=False)
+    fig.legend(new_handles, unique_labels,
+                loc='lower left', bbox_to_anchor = (0.125, 0.1),
+                  ncol=4, frameon=False)
     # Adjust layout
     plt.tight_layout()
-    plt.subplots_adjust(left=0.25)  # Adjust bottom to make space for the legend
+    plt.subplots_adjust(bottom=0.15)
+    
+      # Adjust bottom to make space for the legend
 
     # Save the figure
     plt.savefig(f"outputs/everyone.png", dpi=300)
