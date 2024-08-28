@@ -46,7 +46,7 @@ from unsupervised.utils import initialize_edge_weight
 from unsupervised.encoder import FeaturedTransferModel
 from torch.nn import MSELoss, BCELoss, Sigmoid
 
-from hdbscan import HDBSCAN
+from sklearn.cluster import HDBSCAN
 
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
@@ -118,7 +118,7 @@ def get_embeddings(encoder, loaders):
     return all_embeddings, separate_embeddings
 
 def get_hdbscan_labels(embeddings):
-    labels = HDBSCAN(core_dist_n_jobs = 8, min_cluster_size=50, min_samples=50).fit_predict(embeddings)
+    labels = HDBSCAN(n_jobs = 8, min_cluster_size = 200).fit_predict(embeddings)
 
     return labels
 
@@ -154,8 +154,8 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+    # val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
 
     cmap = plt.get_cmap('tab20')
     unique_categories = np.unique(names)
@@ -298,7 +298,7 @@ def run(args):
 
     # Add the legend
     fig.legend(new_handles, unique_labels,
-                loc='lower left', bbox_to_anchor = (0.125, 0.1),
+                loc='lower left', bbox_to_anchor = (0.125, 0.),
                   ncol=4, frameon=False)
     # Adjust layout
     plt.tight_layout()
