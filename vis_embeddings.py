@@ -118,7 +118,7 @@ def get_embeddings(encoder, loaders):
     return all_embeddings, separate_embeddings
 
 def get_hdbscan_labels(embeddings):
-    labels = HDBSCAN(n_jobs = 8, min_cluster_size = 200).fit_predict(embeddings)
+    labels = HDBSCAN(n_jobs = 8).fit_predict(embeddings)
 
     return labels
 
@@ -154,12 +154,12 @@ def run(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    # val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
-    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+    val_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
+    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
 
-    cmap = plt.get_cmap('tab20')
+    cmap = plt.get_cmap('viridis')
     unique_categories = np.unique(names)
-    colors = cmap(np.linspace(0, 1, len(unique_categories)))
+    colors = cmap(np.linspace(0, 1, int(1.2*len(unique_categories))))
     color_dict = {category: color for category, color in zip(unique_categories, colors)}
 
     cmap = plt.get_cmap('autumn')
@@ -168,7 +168,7 @@ def run(args):
     mol_color_dict = {category: color for category, color in zip(unique_categories, colors)}
 
     embedding_store = []
-    hdbscan_noise_props = []
+    hdbscan_cluster_counts = []
 
     for i_check, checkpoint in enumerate(checkpoints):
 
@@ -209,15 +209,14 @@ def run(args):
         all_embeddings, separate_embeddings = get_embeddings(encoder.encoder, val_loaders)
         hdbscan_labels = get_hdbscan_labels(all_embeddings)
         
-        n_noise = np.sum(hdbscan_labels == -1)
-        prop_noise = np.around(n_noise / all_embeddings.shape[0], decimals=2)
+        n_clusters = np.unique(hdbscan_labels).shape[0]
 
-        hdbscan_noise_props.append(prop_noise)
+        hdbscan_cluster_counts.append(n_clusters)
 
         fig, ax = plt.subplots(figsize = (6,7))
-        ax.set_title(f"{actual_names[i_check]} (DBN: {prop_noise})")
+        ax.set_title(f"{actual_names[i_check]} (NC: {n_clusters})")
 
-        ump = UMAP(n_components = 2, n_neighbors=20, n_jobs=8).fit(all_embeddings)
+        ump = UMAP(n_components = 2, n_neighbors=50, n_jobs=8).fit(all_embeddings)
         projections = []
         for i_emb, embedding in enumerate(tqdm(separate_embeddings)):
             proj = ump.transform(embedding)
@@ -275,7 +274,7 @@ def run(args):
                 color = color_dict[name]
             scatter = ax.scatter(proj[:, 0], proj[:, 1], c=color, label=name, marker=plot_marker, s=2)
             handles_labels.append((scatter, name))
-        ax.set_title(f"{actual_name} (DBN: {hdbscan_noise_props[i_check]})")
+        ax.set_title(f"{actual_name} (NC: {hdbscan_cluster_counts[i_check]})")
         ax.axis('off')
 
 
