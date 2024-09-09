@@ -71,7 +71,7 @@ class Encoder(torch.nn.Module):
 		self.edge_dim = edge_dim
 
 		if convolution == "gin":
-			print(f"Using GIN backbone for {num_gc_layers} layers")
+			# print(f"Using GIN backbone for {num_gc_layers} layers")
 			self.convolution = GINEConv
 
 			for i in range(num_gc_layers):
