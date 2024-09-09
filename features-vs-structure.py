@@ -345,7 +345,7 @@ if __name__ == "__main__":
         plt.yticks(ticks=np.arange(len(structure_noises)), labels=np.round(structure_noises[::-1], 2))
 
         plt.title(f"{val_datasets[1][idataset]}")
-        plt.savefig(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}.png")
+        plt.savefig(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}-{model_name}.png")
         
         # Log the heatmap to wandb
         wandb.log({f"Heatmap-{val_datasets[1][idataset]}-{model_name}": wandb.Image(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}-{model_name}.png")})
