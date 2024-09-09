@@ -1,3 +1,9 @@
+"""
+Code for analysing embeddings without fine-tuning.
+Mostly redundant, producing figures and a dataframe.
+See train and transfer files for more thorough documentation.
+"""
+
 import argparse
 import concurrent.futures
 import glob
@@ -43,7 +49,6 @@ from datasets.neural_dataset import NeuralDataset
 from datasets.random_dataset import RandomDataset
 from datasets.road_dataset import RoadDataset
 from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
 
 
 

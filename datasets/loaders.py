@@ -10,7 +10,6 @@ from datasets.random_dataset import RandomDataset
 from datasets.neural_dataset import NeuralDataset
 from datasets.road_dataset import RoadDataset
 from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
 from datasets.from_ogb_dataset import FromOGBDataset
 
 

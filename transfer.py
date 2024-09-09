@@ -1,8 +1,10 @@
 """
 Anonymous authors, 2023/24
 
-Script for fine-tuning encoders on our validation datasets
-Large sections are from the AD-GCL paper,
+Script for fine-tuning encoders on our validation datasets.
+DOES NOT INCLUDE NODE OR EDGE FEATURES - see features_transfer.py
+
+Large sections are from the AD-GCL paper:
 
 Susheel Suresh, Pan Li, Cong Hao, Georgia Tech, and Jennifer Neville. 2021.
 Adversarial Graph Augmentation to Improve Graph Contrastive Learning.
@@ -13,7 +15,6 @@ https://github.com/susheels/adgcl
 """
 
 import argparse
-import glob
 import logging
 import os
 import random
@@ -41,6 +42,7 @@ from torch.nn import MSELoss, BCELoss, Sigmoid
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
 def warn(*args, **kwargs):
+    # Libraries can throw a lot of warnings
     pass
 import warnings
 warnings.warn = warn
@@ -52,8 +54,6 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
     np.random.seed(seed)
     random.seed(seed)
-
-
 
 def tidy_labels(labels):
     # Label formatting from dataset code can be messy
@@ -251,18 +251,6 @@ def run(args):
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms, num=num)
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
 
-
-    # Currently broken code, ignore
-
-    # if checkpoint == "latest":
-    #     checkpoint_root = "wandb/latest-run/files"
-    #     checkpoints = glob.glob(f"{checkpoint_root}/Checkpoint-*.pt")
-    #     print(checkpoints)
-    #     epochs = np.array([cp.split('-')[0] for cp in checkpoints])
-    #     checkpoint_ind = np.argsort(epochs[::-1])[0]
-    #
-    #     checkpoint_path = f"wandb/latest-run/files/{checkpoints[checkpoint_ind]}"
-
     if checkpoint == "untrained":
         checkpoint_path = "untrained"
 
@@ -320,7 +308,7 @@ def run(args):
         pbar = tqdm(range(n_repeats))
         for n in pbar:
             # Run fine_tune(...) for each repeat
-            # Need to re-load the model
+            # Need to re-load the model to reset weights
             model = TransferModel(
                 Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type),
                 proj_hidden_dim=args.emb_dim, output_dim=1, features=evaluation_node_features).to(device)
@@ -335,7 +323,6 @@ def run(args):
                                                                                                                               test_loader,
                                                                                                                               name = name,
                                                                                                                               n_epochs=num_epochs)
-
             pretrain_val[n, :] = pretrain_val_losses
             untrain_val[n, :] = untrain_val_losses
 

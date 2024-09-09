@@ -14,26 +14,23 @@ https://github.com/susheels/adgcl
 
 import argparse
 import logging
-import random
-
-import wandb
-from tqdm import tqdm
 import os
+import random
 
 import numpy as np
 import torch
+import wandb
 from torch_geometric.transforms import Compose
 from torch_scatter import scatter
+from tqdm import tqdm
 
-from utils import setup_wandb
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
-
-
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import Encoder
 from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
+from utils import setup_wandb
 
 
 def warn(*args, **kwargs):
@@ -81,8 +78,8 @@ def train_epoch_random_edges(dataloader,
 
     Returns:
         model_loss_all: loss for epoch
-        view_loss_all: None - placeholder for code consistency with AD-GCL
-        reg_all: None - placeholder for code consistency with AD-GCL
+        view_loss_all: -1. - placeholder for code consistency with AD-GCL
+        reg_all: -1. - placeholder for code consistency with AD-GCL
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -126,8 +123,8 @@ def train_epoch_random_nodes(dataloader,
 
     Returns:
         model_loss_all: loss for epoch
-        view_loss_all: None - placeholder for code consistency with AD-GCL
-        reg_all: None - placeholder for code consistency with AD-GCL
+        view_loss_all: -1. - placeholder for code consistency with AD-GCL
+        reg_all: -1. - placeholder for code consistency with AD-GCL
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -156,15 +153,13 @@ def train_epoch_random_nodes(dataloader,
         mask_1 = mask_1.to(batch.x.dtype).to(device)
         mask_2 = mask_2.to(batch.x.dtype).to(device)
 
-
         x_aug_1, _ = model(batch.batch.to(device), batch.x.to(device), batch.edge_index.to(device), batch.edge_attr.to(device), mask_1.to(device))
         x_aug_2, _ = model(batch.batch.to(device), batch.x.to(device), batch.edge_index.to(device), batch.edge_attr.to(device), mask_2.to(device))
 
-        model_loss = cl_loss(x_aug_1, x_aug_2) #
-        # model_loss = model.calc_loss(x_aug_1, x_aug_2)
+        model_loss = cl_loss(x_aug_1, x_aug_2)
         model_loss_all += model_loss.item() * batch.num_graphs
 
-        # standard gradient descent formulation
+        # standard gradient descent
         model_loss.backward()
         model_optimizer.step()
 
@@ -280,7 +275,7 @@ def run(args):
     logging.info("Using Device: %s" % device)
     logging.info("Seed: %d" % args.seed)
     logging.info(args)
-    # setup_seed(args.seed)
+    setup_seed(args.seed)
 
     # Check dataset directory exists
     if "original_datasets" not in os.listdir():
@@ -296,9 +291,12 @@ def run(args):
 
     # Whether to include node labels in evaluation
     evaluation_node_features = args.node_features
+
+    # Exclude molecules or non-molecules
     molecules = not args.no_molecules
     socials = not args.no_socials
 
+    # Option to exclude specific social datasets for ablation studies
     excludes = args.exclude if args.exclude != "None" else None
     print(f"excluding {excludes}")
     if excludes is not None:
@@ -307,7 +305,7 @@ def run(args):
         wandb.log({"Social-Ablation": False})
 
 
-    print(f"Chemicals: {molecules}, Socials: {socials}")
+    print(f"\nChemicals: {molecules}, Socials: {socials}")
 
     my_transforms = Compose([initialize_edge_weight])
 
@@ -315,7 +313,7 @@ def run(args):
     dataset_subset = ["chemical" if molecules else "dummy",
                       "social" if socials else "dummy"]
 
-    print(f"Passing subset: {dataset_subset}")
+    print(f"Passing subset: {dataset_subset}\n")
     dataloader = get_train_loader(args.batch_size, my_transforms, subset=dataset_subset, social_excludes=excludes)
 
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
@@ -363,13 +361,13 @@ def run(args):
                                                                        model_loss_all, view_loss_all, reg_all)
         else:
             if random_edge_dropping:
-                print(f"\n\nUSING RANDOM EDGE DROPPING\n\n")
+                print(f"\n{'='*20}\nUSING RANDOM EDGE DROPPING\n{'='*20}\n")
                 model_loss_all, view_loss_all, reg_all = train_epoch_random_edges(dataloader,
                                                                            model, model_optimizer,
                                                                            model_loss_all,
                                                                            drop_proportion=drop_proportion)
             elif random_node_dropping:
-                print(f"\n\nUSING RANDOM NODE DROPPING\n\n")
+                print(f"\n{'='*20}\nUSING RANDOM NODE DROPPING\n{'='*20}\n")
                 model_loss_all, view_loss_all, reg_all = train_epoch_random_nodes(dataloader,
                                                                            model, model_optimizer,
                                                                            model_loss_all,
@@ -387,6 +385,7 @@ def run(args):
                    "View Loss": fin_view_loss,
                    "Reg Loss": fin_reg})
 
+        # Evaluate every 25 epochs, and save checkpoint
         if epoch % 25 == 0:
 
             if args.proj_dim != 1:

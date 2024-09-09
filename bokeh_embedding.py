@@ -1,3 +1,9 @@
+"""
+Code to produce a bokeh dashboard of embeddings from a trained model
+Mostly used for visualising the embeddings of a model trained on multiple datasets
+Not mentioned in ToP paper
+"""
+
 import argparse
 import concurrent.futures
 import glob
@@ -44,7 +50,6 @@ from datasets.neural_dataset import NeuralDataset
 from datasets.random_dataset import RandomDataset
 from datasets.road_dataset import RoadDataset
 from datasets.tree_dataset import TreeDataset
-from datasets.lattice_dataset import LatticeDataset
 
 
 
