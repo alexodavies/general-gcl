@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 
 from datasets.loaders import get_chemical_datasets, get_val_loaders, get_test_loaders
 
-from noisenoise import add_noise_to_graph, add_noise_to_dataset
+from noisenoise import add_weighted_noise_to_dataset, compute_onehot_probabilities, compute_onehot_probabilities_edge
 from unsupervised.utils import initialize_edge_weight
 from torch_geometric.transforms import Compose
 
@@ -221,7 +221,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_e
         score_fn = mean_squared_error
 
 
-    if checkpoint_path != "untrained":
+    if "untrained" not in checkpoint_path:
         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
     model.to(device)
@@ -295,8 +295,8 @@ if __name__ == "__main__":
     # Setup wandb
     setup_wandb(vars(args), offline = False, name = "noise-noise")
 
-    structure_noises = np.linspace(0., 1, 10)
-    feature_noises = np.linspace(0., 1, 10)
+    structure_noises = np.linspace(0., 1, 8)
+    feature_noises = np.linspace(0., 1, 8)
 
     loss_matrix = np.zeros((structure_noises.shape[0], feature_noises.shape[0]))
     dev_matrix = np.zeros((structure_noises.shape[0], feature_noises.shape[0]))
@@ -308,14 +308,22 @@ if __name__ == "__main__":
     checkpoint_path = "outputs/"+args.checkpoint
 
     for idataset, dataset in enumerate(val_datasets[0]):
+        weights_nodes = compute_onehot_probabilities(DataLoader(dataset, 128))
+        weights_edges = compute_onehot_probabilities_edge(DataLoader(dataset, 128))
+
         for i_feat in feat_pbar:
             for i_struc in struc_pbar:
                 repeat_structure_losses = []
-                for n_rep in tqdm(range(10), leave=False, colour='green'):
+                for n_rep in tqdm(range(8), leave=False, colour='green'):
+
                     s_noise = structure_noises[i_struc]
                     feat_noise = feature_noises[i_feat]
-                    dataset = add_noise_to_dataset(val_datasets[0][idataset], t_structure=s_noise, t_feature=feat_noise)
+
+                    dataset = add_weighted_noise_to_dataset(copy.deepcopy(val_datasets[0][idataset]), t_structure=s_noise, t_feature=feat_noise, weights_nodes=weights_nodes, weights_edges=weights_edges)
                     dataset = DataLoader(dataset, batch_size=64)
+
+                    test_dataset = copy.deepcopy(test_datasets[idataset])
+                    test_dataset = DataLoader(test_dataset, batch_size=64)
 
                     model = FeaturedTransferModel(
                         Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
@@ -342,7 +350,7 @@ if __name__ == "__main__":
         plt.ylabel("Structure Noise")
         plt.xlabel("Feature Noise")
         plt.xticks(ticks=np.arange(len(feature_noises)), labels=np.round(feature_noises, 2))
-        plt.yticks(ticks=np.arange(len(structure_noises)), labels=np.round(structure_noises[::-1], 2))
+        plt.yticks(ticks=np.arange(len(structure_noises)), labels=np.round(structure_noises, 2))
 
         plt.title(f"{val_datasets[1][idataset]}")
         plt.savefig(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}-{model_name}.png")
