@@ -299,7 +299,7 @@ if __name__ == "__main__":
     feature_noises = np.linspace(0., 1, 8)
 
     model_names = ["untrained", "all-100.pt"]  # List of model names
-    checkpoint_paths = ["outputs/untrained", "outputs/all-100.pt"]
+    checkpoint_paths = ["outputs/chem-100.pt", "outputs/all-100.pt"]
 
     for idataset, dataset in enumerate(val_datasets[0]):
         structure_loss_series_per_model = {}
@@ -416,12 +416,12 @@ if __name__ == "__main__":
 
         ax[0].set_xlabel("Structure Noise")
         ax[0].set_ylabel(f"Performance {perf_string}")
-        ax[0].set_title(f"{val_datasets[1][idataset]} - Structure Noise vs Performance")
+        # ax[0].set_title(f"{val_datasets[1][idataset]} - Structure Noise vs Performance")
         ax[0].grid(True)
 
         ax[1].set_xlabel("Feature Noise")
         ax[1].set_ylabel(f"Performance {perf_string}")
-        ax[1].set_title(f"{val_datasets[1][idataset]} - Feature Noise vs Performance")
+        # ax[1].set_title(f"{val_datasets[1][idataset]} - Feature Noise vs Performance")
         ax[1].grid(True)
 
         # plt.suptitle(f"Performance Comparison for {val_datasets[1][idataset]}")
