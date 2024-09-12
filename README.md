@@ -50,13 +50,30 @@ and the same syntax for node classification and edge classification.
 The environmental setup is fairly minimal.
 The broad requirements are standard for graph deep-learning:
 
+ - Python=3.11
  - pytorch-geometric
  - pytorch (shocking I know)
  - numpy, scipy, matplotlib, pandas, etc.
  - ogb (open graph benchmark)
 
-Apologies for this being a rather brief description. 
-Pytorch-geometric is still a little volatile, and often doesn't play well with others depending on your hardware, so we leave it up to the user.
+
+#### Environment
+
+We include an environment for our working computer:
+
+- Linux
+- Ubuntu 22.02
+- Nvidia driver version 555.42.06
+- Cuda version 12.5
+
+Follow these steps to create a Conda env with the required packages:
+
+```
+conda create -n pyg-top python=3.11
+>>> ...are you sure you want to ... [y/n]
+conda activate pyg-top
+pip install -r requirements.txt
+```
 
 ### Training
 `train.py --args` can be used to train new FoToM models.
@@ -139,12 +156,23 @@ Pre-trained models can be downloaded with `download_models.sh`, see above.
 `node_classification_transfer.py` and `edge_prediction_transfer.py` perform transfer runs for node classification and edge prediction.
 Arguments are the same as for transfer with features.
 
+#### Noise/Noise Analysis
+
+Our code for testing the information in features vs structure can be found in `general-gcl/noisenoise`.
+
+The code is executed in `features-vs-structure-lines.py`, with model names hard-coded, so simply run:
+
+```
+    python features-vs-structure-lines.py
+```
+
+The resulting figures are then placed under `outputs/noise-noise/.`
+
 #### Further code
 
 Dataset code can be found under `/datasets/`.
 Loaders can be found here under `loaders.py`, and other datasets have their own respective processing files.
 `from_ogb_dataset.py` converts an OGB dataset into a standard pytorch-geometric dataset.
-
 
 
 
