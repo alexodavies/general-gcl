@@ -31,6 +31,7 @@ from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from utils import setup_wandb
+from torch_geometric.nn import GPSConv
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -194,6 +195,9 @@ def train_epoch_adgcl(dataloader,
         # set up
         batch = batch.to(device)
 
+        if model.encoder.convolution  == GPSConv:
+            print("Model is GPSConv")
+
         # train view to maximize contrastive loss
         view_learner.train()
         view_learner.zero_grad()
@@ -264,6 +268,10 @@ def train_epoch_adgcl(dataloader,
         # standard gradient descent formulation
         model_loss.backward()
         model_optimizer.step()
+
+        if model.encoder.convolution  == GPSConv:
+        		# if self.convolution:
+            model.encoder.redraw_projection.redraw_projections()
 
     return model_loss_all, view_loss_all, reg_all
 

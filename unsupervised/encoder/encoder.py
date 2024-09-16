@@ -205,8 +205,6 @@ class Encoder(torch.nn.Module):
 				x = F.dropout(F.relu(x), self.drop_ratio, training=self.training)
 			xs.append(x)
 		
-		if self.convolution == GPSConv:
-			self.redraw_projection.redraw_projections()
 		# compute graph embedding using pooling
 		if self.pooling_type == "standard":
 			xpool = global_add_pool(x, batch)
