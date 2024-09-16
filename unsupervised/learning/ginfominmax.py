@@ -7,6 +7,7 @@ class GInfoMinMax(torch.nn.Module):
 		super(GInfoMinMax, self).__init__()
 
 		self.encoder = encoder
+		proj_hidden_dim = self.encoder.emb_dim
 		self.input_proj_dim = self.encoder.out_graph_dim
 
 		self.proj_head = Sequential(Linear(self.input_proj_dim, proj_hidden_dim), ReLU(inplace=True),

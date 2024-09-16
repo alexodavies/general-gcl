@@ -298,8 +298,8 @@ if __name__ == "__main__":
     structure_noises = np.linspace(0., 1, 8)
     feature_noises = np.linspace(0., 1, 8)
 
-    model_names = ["untrained", "all-100.pt"]  # List of model names
-    checkpoint_paths = ["outputs/chem-100.pt", "outputs/all-100.pt"]
+    model_names = ["untrained", "chem-100", "social-100.pt", "all-100"]  # List of model names
+    checkpoint_paths = ["untrained", "outputs/chem-100.pt", "outputs/social-100.pt", "outputs/all-100.pt"]
 
     for idataset, dataset in enumerate(val_datasets[0]):
         structure_loss_series_per_model = {}
@@ -398,10 +398,12 @@ if __name__ == "__main__":
         for model_name in model_names:
             # Plot Structure Noise vs Performance
             ax[0].errorbar(structure_noises, structure_loss_series_per_model[model_name],
-                           yerr=structure_dev_series_per_model[model_name], fmt='-o', label=f'Structure Noise - {model_name}')
+                           yerr=structure_dev_series_per_model[model_name], fmt='-o', label=f'{model_name}',
+                           capsize=2)
             # Plot Feature Noise vs Performance
             ax[1].errorbar(feature_noises, feature_loss_series_per_model[model_name],
-                           yerr=feature_dev_series_per_model[model_name], fmt='-o', label=f'Feature Noise - {model_name}')
+                           yerr=feature_dev_series_per_model[model_name], fmt='-o', label=f'{model_name}',
+                           capsize=2)
             
         y_lims = ax[0].get_ylim(), ax[1].get_ylim()
         min_y = min([y[0] for y in y_lims])
@@ -415,12 +417,12 @@ if __name__ == "__main__":
             perf_string = "Mean(MSE)"
 
         ax[0].set_xlabel("Structure Noise")
-        ax[0].set_ylabel(f"Performance {perf_string}")
+        ax[0].set_ylabel(f"{perf_string}")
         # ax[0].set_title(f"{val_datasets[1][idataset]} - Structure Noise vs Performance")
         ax[0].grid(True)
 
         ax[1].set_xlabel("Feature Noise")
-        ax[1].set_ylabel(f"Performance {perf_string}")
+        ax[1].set_ylabel(f"{perf_string}")
         # ax[1].set_title(f"{val_datasets[1][idataset]} - Feature Noise vs Performance")
         ax[1].grid(True)
 
