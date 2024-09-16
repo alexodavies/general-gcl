@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 
 from datasets.loaders import get_chemical_datasets, get_val_loaders, get_test_loaders
 
-from noisenoise import add_noise_to_graph, add_noise_to_dataset
+from noisenoise import add_weighted_noise_to_dataset, compute_onehot_probabilities, compute_onehot_probabilities_edge, add_noise_to_dataset
 from unsupervised.utils import initialize_edge_weight
 from torch_geometric.transforms import Compose
 
@@ -221,7 +221,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_e
         score_fn = mean_squared_error
 
 
-    if checkpoint_path != "untrained":
+    if "untrained" not in checkpoint_path:
         model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
         model.load_state_dict(model_dict['encoder_state_dict'], strict=False)
     model.to(device)
@@ -231,7 +231,7 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_e
     # pbar = tqdm(range(n_epochs), leave=False)
     best_val_loss, best_epoch = 1.e9, 0
     train_losses, val_losses = [], []
-    for i_epoch in tqdm(range(n_epochs), leave=False):
+    for i_epoch in range(n_epochs):
         model.train()
         # ys, y_preds = [], []
         for i_batch, batch in enumerate(val_loader):
@@ -284,82 +284,153 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_e
 if __name__ == "__main__":
     args = arg_parse()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
+
     # Load the dataset
     my_transforms = Compose([initialize_edge_weight])
     test_datasets = get_chemical_datasets(my_transforms, -1, "test")
     test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
-    
+
     val_datasets = get_chemical_datasets(my_transforms, -1, "val")
-    
+
     # Setup wandb
-    setup_wandb(vars(args), offline = False, name = "noise-noise")
+    setup_wandb(vars(args), offline=False, name="noise-noise")
 
-    structure_noises = np.linspace(0., 1, 10)
-    feature_noises = np.linspace(0., 1, 10)
+    structure_noises = np.linspace(0., 1, 8)
+    feature_noises = np.linspace(0., 1, 8)
 
-    loss_matrix = np.zeros((structure_noises.shape[0], feature_noises.shape[0]))
-    dev_matrix = np.zeros((structure_noises.shape[0], feature_noises.shape[0]))
-
-    struc_pbar = tqdm(range(structure_noises.shape[0]), colour='blue', leave=False)
-    feat_pbar = tqdm(range(feature_noises.shape[0]), colour='cyan')
-
-    model_name = args.checkpoint.split(".")[0]
-    checkpoint_path = "outputs/"+args.checkpoint
+    model_names = ["untrained", "chem-100", "social-100.pt", "all-100"]  # List of model names
+    checkpoint_paths = ["untrained", "outputs/chem-100.pt", "outputs/social-100.pt", "outputs/all-100.pt"]
 
     for idataset, dataset in enumerate(val_datasets[0]):
-        for i_feat in feat_pbar:
-            for i_struc in struc_pbar:
+        structure_loss_series_per_model = {}
+        feature_loss_series_per_model = {}
+        structure_dev_series_per_model = {}
+        feature_dev_series_per_model = {}
+
+        weights_nodes = compute_onehot_probabilities(DataLoader(dataset, 128))
+        weights_edges = compute_onehot_probabilities_edge(DataLoader(dataset, 128))
+
+        for model_name, checkpoint_path in zip(model_names, checkpoint_paths):
+            structure_loss_series = []
+            feature_loss_series = []
+            structure_dev_series = []
+            feature_dev_series = []
+
+            # Performance vs. Structure Noise (keeping Feature Noise constant)
+            structure_pbar = tqdm(range(structure_noises.shape[0]), colour='blue', leave=False, desc="Structure Noise")
+            for i_struc in structure_pbar:
                 repeat_structure_losses = []
-                for n_rep in tqdm(range(10), leave=False, colour='green'):
-                    s_noise = structure_noises[i_struc]
-                    feat_noise = feature_noises[i_feat]
-                    dataset = add_noise_to_dataset(val_datasets[0][idataset], t_structure=s_noise, t_feature=feat_noise)
-                    dataset = DataLoader(dataset, batch_size=64)
+                s_noise = structure_noises[i_struc]
+                feat_noise = 0.0  # Keeping feature noise constant
+
+                for n_rep in tqdm(range(8), leave=False, colour='green'):
+                    # dataset_copy = add_weighted_noise_to_dataset(copy.deepcopy(val_datasets[0][idataset]),
+                    #                                              t_structure=s_noise,
+                    #                                              t_feature=feat_noise,
+                    #                                              weights_nodes=weights_nodes,
+                    #                                              weights_edges=weights_edges)
+
+                    dataset_copy = add_noise_to_dataset(copy.deepcopy(val_datasets[0][idataset]),
+                                                t_structure=s_noise,
+                                                t_feature=feat_noise)
+                    dataset_copy = DataLoader(dataset_copy, batch_size=64)
+                    test_dataset_copy = test_datasets[idataset]
 
                     model = FeaturedTransferModel(
                         Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
                                 pooling_type=args.pooling_type, convolution=args.backbone),
                         proj_hidden_dim=args.emb_dim, output_dim=1, features=True,
                         node_feature_dim=atom_feature_dims, edge_feature_dim=bond_feature_dims).to(device)
-                    
-                    train_losses, val_losses, val_score, best_epoch, best_val_loss = fine_tune(model,
-                                                                                                checkpoint_path,
-                                                                                                dataset,
-                                                                                                    test_datasets[idataset],
-                                                                                                    name=val_datasets[1][idataset],
-                                                                                                        n_epochs=25)
 
+                    _, _, val_score, _, _ = fine_tune(model, checkpoint_path, dataset_copy, test_dataset_copy, name=val_datasets[1][idataset], n_epochs=25)
                     repeat_structure_losses.append(val_score)
 
-                loss_matrix[i_struc, i_feat] = np.mean(repeat_structure_losses)
-                dev_matrix[i_struc, i_feat] = np.std(repeat_structure_losses)
+                structure_loss_series.append(np.mean(repeat_structure_losses))
+                structure_dev_series.append(np.std(repeat_structure_losses))
 
-        # Plotting the heatmap with logarithmic color scale
-        plt.figure(figsize=(8, 6))
-        plt.imshow(loss_matrix, cmap='inferno')  # Logarithmic scale
-        plt.colorbar(label='Mean val score')
-        plt.ylabel("Structure Noise")
-        plt.xlabel("Feature Noise")
-        plt.xticks(ticks=np.arange(len(feature_noises)), labels=np.round(feature_noises, 2))
-        plt.yticks(ticks=np.arange(len(structure_noises)), labels=np.round(structure_noises[::-1], 2))
+            # Performance vs. Feature Noise (keeping Structure Noise constant)
+            feature_pbar = tqdm(range(feature_noises.shape[0]), colour='cyan', leave=False, desc="Feature Noise")
+            for i_feat in feature_pbar:
+                if i_feat == 0:
+                    feature_loss_series.append(structure_loss_series[0])
+                    feature_dev_series.append(structure_dev_series[0])
+                    continue
 
-        plt.title(f"{val_datasets[1][idataset]}")
-        plt.savefig(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}-{model_name}.png")
-        
-        # Log the heatmap to wandb
-        wandb.log({f"Heatmap-{val_datasets[1][idataset]}-{model_name}": wandb.Image(f"outputs/noise-noise/heatmap-{val_datasets[1][idataset]}-{model_name}.png")})
+                repeat_feature_losses = []
+                s_noise = 0.0  # Keeping structure noise constant
+                feat_noise = feature_noises[i_feat]
 
-        # Convert the loss matrix to a CSV format for logging
-        loss_matrix_df = pd.DataFrame(loss_matrix, index=np.round(structure_noises, 2), columns=np.round(feature_noises, 2))
-        loss_matrix_df.index.name = "Structure Noise"
-        loss_matrix_df.columns.name = "Feature Noise"
+                for n_rep in tqdm(range(8), leave=False, colour='green'):
+                    
+                    # dataset_copy = add_weighted_noise_to_dataset(copy.deepcopy(val_datasets[0][idataset]),
+                    #                                              t_structure=s_noise,
+                    #                                              t_feature=feat_noise,
+                    #                                              weights_nodes=weights_nodes,
+                    #                                              weights_edges=weights_edges)
 
-        # Save the CSV file and log it to wandb
-        csv_filename = f"outputs/noise-noise/loss_matrix-{model_name}-{val_datasets[1][idataset]}.csv"
-        loss_matrix_df.to_csv(csv_filename)
-        
-        # Log CSV to wandb
-        # wandb.log({f"Score Matrix CSV-{val_datasets[1][idataset]}": wandb.Table(dataframe=loss_matrix_df.reset_index())})
+                    dataset_copy = add_noise_to_dataset(copy.deepcopy(val_datasets[0][idataset]),
+                                                t_structure=s_noise,
+                                                t_feature=feat_noise)
+                    dataset_copy = DataLoader(dataset_copy, batch_size=64)
+                    test_dataset_copy = test_datasets[idataset]
+
+                    model = FeaturedTransferModel(
+                        Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+                                pooling_type=args.pooling_type, convolution=args.backbone),
+                        proj_hidden_dim=args.emb_dim, output_dim=1, features=True,
+                        node_feature_dim=atom_feature_dims, edge_feature_dim=bond_feature_dims).to(device)
+
+                    _, _, val_score, _, _ = fine_tune(model, checkpoint_path, dataset_copy, test_dataset_copy, name=val_datasets[1][idataset], n_epochs=25)
+                    repeat_feature_losses.append(val_score)
+
+                feature_loss_series.append(np.mean(repeat_feature_losses))
+                feature_dev_series.append(np.std(repeat_feature_losses))
+
+            # Store results per model
+            structure_loss_series_per_model[model_name] = structure_loss_series
+            structure_dev_series_per_model[model_name] = structure_dev_series
+            feature_loss_series_per_model[model_name] = feature_loss_series
+            feature_dev_series_per_model[model_name] = feature_dev_series
+
+        # Plotting Structure Noise vs. Performance side-by-side for each dataset
+        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+
+        for model_name in model_names:
+            # Plot Structure Noise vs Performance
+            ax[0].errorbar(structure_noises, structure_loss_series_per_model[model_name],
+                           yerr=structure_dev_series_per_model[model_name], fmt='-o', label=f'{model_name}',
+                           capsize=2)
+            # Plot Feature Noise vs Performance
+            ax[1].errorbar(feature_noises, feature_loss_series_per_model[model_name],
+                           yerr=feature_dev_series_per_model[model_name], fmt='-o', label=f'{model_name}',
+                           capsize=2)
+            
+        y_lims = ax[0].get_ylim(), ax[1].get_ylim()
+        min_y = min([y[0] for y in y_lims])
+        max_y = max([y[1] for y in y_lims])
+        ax[0].set_ylim(min_y, max_y)
+        ax[1].set_ylim(min_y, max_y)
+
+        if val_datasets[1][idataset] in ["ogbg-molhiv", "ogbg-bbbp", "ogbg-molbace", "ogbg-molclintox"]:
+            perf_string = "Mean(1 - ROC AUC)"
+        else:
+            perf_string = "Mean(MSE)"
+
+        ax[0].set_xlabel("Structure Noise")
+        ax[0].set_ylabel(f"{perf_string}")
+        # ax[0].set_title(f"{val_datasets[1][idataset]} - Structure Noise vs Performance")
+        ax[0].grid(True)
+
+        ax[1].set_xlabel("Feature Noise")
+        ax[1].set_ylabel(f"{perf_string}")
+        # ax[1].set_title(f"{val_datasets[1][idataset]} - Feature Noise vs Performance")
+        ax[1].grid(True)
+
+        # plt.suptitle(f"Performance Comparison for {val_datasets[1][idataset]}")
+        plt.tight_layout()
+        ax[0].legend(shadow = True)
+        ax[1].legend(shadow = True)
+        plt.savefig(f"outputs/noise-noise/performance_comparison-{val_datasets[1][idataset]}.png")
+        wandb.log({f"Performance Comparison-{val_datasets[1][idataset]}": wandb.Image(f"outputs/noise-noise/performance_comparison-{val_datasets[1][idataset]}.png")})
 
     wandb.finish()

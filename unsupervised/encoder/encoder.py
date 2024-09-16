@@ -6,8 +6,33 @@ from torch.nn import Sequential, Linear, ReLU
 from torch_geometric.nn import global_add_pool
 
 from unsupervised.convs import GINEConv
-from torch_geometric.nn import GATv2Conv, GCNConv
+from torch_geometric.nn import GATv2Conv, GCNConv, GPSConv
 
+from typing import Any, Dict, Optional
+from torch_geometric.nn.attention import PerformerAttention
+
+# GraphGPS results are not listed in current works
+# Only used for attention with GPSConv
+class RedrawProjection:
+    def __init__(self, model: torch.nn.Module,
+                 redraw_interval: Optional[int] = None):
+        self.model = model
+        self.redraw_interval = redraw_interval
+        self.num_last_redraw = 0
+
+    def redraw_projections(self):
+        if not self.model.training or self.redraw_interval is None:
+            return
+        if self.num_last_redraw >= self.redraw_interval:
+            fast_attentions = [
+                module for module in self.model.modules()
+                if isinstance(module, PerformerAttention)
+            ]
+            for fast_attention in fast_attentions:
+                fast_attention.redraw_projection_matrix()
+            self.num_last_redraw = 0
+            return
+        self.num_last_redraw += 1
 
 class Encoder(torch.nn.Module):
 	"""
@@ -50,10 +75,15 @@ class Encoder(torch.nn.Module):
 		super(Encoder, self).__init__()
 
 		self.pooling_type = pooling_type
+		if convolution == "gps":	
+			emb_dim = np.around(emb_dim / 8).astype(int) * 8
+			print(f"Switching embedding dim to nearest compatible with 8 heads, {emb_dim}")
 		self.emb_dim = emb_dim
 		self.num_gc_layers = num_gc_layers
 		self.drop_ratio = drop_ratio
 		self.is_infograph = is_infograph
+
+
 
 		self.out_node_dim = self.emb_dim
 		if self.pooling_type == "standard":
@@ -99,7 +129,27 @@ class Encoder(torch.nn.Module):
 				self.convs.append(GATv2Conv(emb_dim, emb_dim))
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.bns.append(bn)
-		else:
+
+		elif convolution == "gps":
+			print(f"Using GPS with GIN backbone for {num_gc_layers} layers")
+			self.convolution = GPSConv
+
+			for i in range(num_gc_layers):
+				nn = Sequential(Linear(emb_dim, 2 * emb_dim), torch.nn.BatchNorm1d(2 * emb_dim), ReLU(),
+								Linear(2 * emb_dim, emb_dim))
+				conv = GPSConv(emb_dim,
+				   				GINEConv(nn),
+								heads = 8,
+								attn_type="performer")
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.convs.append(conv)
+				self.bns.append(bn)
+
+			self.redraw_projection = RedrawProjection(
+										self.convs,
+										redraw_interval=1000)
+
+		else:	
 			raise NotImplementedError
 
 		self.init_emb()
@@ -145,7 +195,8 @@ class Encoder(torch.nn.Module):
 				x = self.convs[i](x, edge_index, edge_weight)
 			elif self.convolution == GATv2Conv:
 				x = self.convs[i](x, edge_index)
-
+			elif self.convolution == GPSConv:
+				x = self.convs[i](x, edge_index, batch, edge_attr = edge_attr, edge_weight = edge_weight)
 			x = self.bns[i](x)
 			if i == self.num_gc_layers - 1:
 				# remove relu for the last layer
@@ -153,7 +204,9 @@ class Encoder(torch.nn.Module):
 			else:
 				x = F.dropout(F.relu(x), self.drop_ratio, training=self.training)
 			xs.append(x)
-
+		
+		if self.convolution == GPSConv:
+			self.redraw_projection.redraw_projections()
 		# compute graph embedding using pooling
 		if self.pooling_type == "standard":
 			xpool = global_add_pool(x, batch)
