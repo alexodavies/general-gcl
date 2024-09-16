@@ -32,6 +32,7 @@ from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from utils import setup_wandb
 
+torch.autograd.set_detect_anomaly(True)
 
 def warn(*args, **kwargs):
     pass
