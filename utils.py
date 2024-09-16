@@ -225,6 +225,30 @@ def setup_wandb(cfg, offline = False, name = None):
     return cfg
 
 
+def summarize_model(model):
+    """
+    Prints the layers of the model, total trainable parameters, and model size in MB.
+    
+    Args:
+    model (torch.nn.Module): The PyTorch model to summarize.
+    """
+    
+    # List model layers
+    print("Model Layers:")
+    for name, layer in model.named_children():
+        print(f"{name}: {layer.__class__.__name__}")
+
+    # Calculate the total number of parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    # Model size (in MB)
+    model_size = total_params * 4 / (1024 ** 2)  # Assuming 32-bit (4 bytes per float)
+
+    print(f"\nModel Size: {model_size:.2f} MB")
+    print(f"Trainable Parameters: {trainable_params}")
+
+
 def ESWR(graph, n_graphs, size):
 
     # possible_samplers = inspect.getmembers(samplers, inspect.isclass)

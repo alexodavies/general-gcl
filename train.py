@@ -33,6 +33,8 @@ from unsupervised.view_learner import ViewLearner
 from utils import setup_wandb
 from torch_geometric.nn import GPSConv
 
+from utils import summarize_model
+
 torch.autograd.set_detect_anomaly(True)
 
 def warn(*args, **kwargs):
@@ -191,12 +193,13 @@ def train_epoch_adgcl(dataloader,
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if model.encoder.convolution  == GPSConv:
+        print("Model is GPSConv")
+
+    
     for batch in tqdm(dataloader, leave = False):
         # set up
         batch = batch.to(device)
-
-        if model.encoder.convolution  == GPSConv:
-            print("Model is GPSConv")
 
         # train view to maximize contrastive loss
         view_learner.train()
@@ -332,6 +335,8 @@ def run(args):
     model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
                         proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
+
+    summarize_model(model)
 
     # Only need a view learner for adversarial training
     if not random_dropping:
