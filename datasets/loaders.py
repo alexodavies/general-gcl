@@ -206,6 +206,7 @@ def get_test_loaders(batch_size, transforms, num = 2000):
     """
 
     datasets, names = get_test_datasets(transforms, num=num)
+    print(f"Test datasets:\n{list(zip(names, datasets))}\n")
     datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
 
     return datasets, names
@@ -235,6 +236,7 @@ def get_val_loaders(batch_size, transforms, num = 5000):
     """
 
     datasets, names = get_val_datasets(transforms, num = num)
+    print(f"Validation datasets:\n{[(names[idataset], len(dataset)) for idataset, dataset in enumerate(datasets)]}\n")
     datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
 
     return datasets, names

@@ -76,8 +76,8 @@ class Encoder(torch.nn.Module):
 
 		self.pooling_type = pooling_type
 		if convolution == "gps":	
-			emb_dim = np.around(emb_dim / 8).astype(int) * 8
-			print(f"Switching embedding dim to nearest compatible with 8 heads, {emb_dim}")
+			emb_dim = np.around(emb_dim / 4).astype(int) * 4
+			print(f"Switching embedding dim to nearest compatible with 4 heads, {emb_dim}")
 		self.emb_dim = emb_dim
 		self.num_gc_layers = num_gc_layers
 		self.drop_ratio = drop_ratio
@@ -139,8 +139,12 @@ class Encoder(torch.nn.Module):
 								Linear(2 * emb_dim, emb_dim))
 				conv = GPSConv(emb_dim,
 				   				GINEConv(nn),
-								heads = 8,
-								attn_type="performer")
+								heads = 4,
+								attn_type="performer",
+								act = "leaky_relu",  # to allow small gradients even for negative inputs
+								act_kwargs = {"negative_slope": 0.01},  # if using LeakyReLU)
+								dropout=0.3
+								)
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.convs.append(conv)
 				self.bns.append(bn)
