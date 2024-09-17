@@ -400,7 +400,7 @@ def run(args):
                    "Reg Loss": fin_reg})
 
         # Evaluate every 25 epochs, and save checkpoint
-        if epoch % 25 == 0:
+        if epoch % 10 == 0:
 
             if args.proj_dim != 1:
                 general_ee.embedding_evaluation(model.encoder, val_loaders, test_loaders, names, node_features = evaluation_node_features)
