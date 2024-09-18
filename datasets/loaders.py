@@ -53,12 +53,12 @@ def get_social_datasets(transforms, num, stage = "train", exclude = None):
 
     if stage == "train":
         social_datasets = [
-            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', num=num)),
             transforms(EgoDataset(os.getcwd() + '/original_datasets/' + 'twitch_egos', num=num, stage=stage)),
+            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', num=num)),
             transforms(CoraDataset(os.getcwd() + '/original_datasets/' + 'cora', num=num)),
             transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
             transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num))]
-        names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly"]
+        names = ["twitch_egos", "facebook_large", "cora", "roads", "fruit_fly"]
 
         if exclude is None:
             print(f"Not excluding any social datasets")
@@ -88,8 +88,8 @@ def get_social_datasets(transforms, num, stage = "train", exclude = None):
 
     elif stage == "val":
         social_datasets = [
-            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
             transforms(EgoDataset(os.getcwd() + '/original_datasets/' + 'twitch_egos', stage=stage, num=num)),
+            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
             transforms(CoraDataset(os.getcwd() + '/original_datasets/' + 'cora', stage=stage, num=num)),
             transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
             transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num)),
@@ -97,11 +97,11 @@ def get_social_datasets(transforms, num, stage = "train", exclude = None):
             transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage=stage, num=num)),
             transforms(CommunityDataset(os.getcwd() + '/original_datasets/' + 'community', stage=stage, num=num))
             ]
-        names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly", "trees", "random", "community"]
+        names = ["twitch_egos", "facebook_large", "cora", "roads", "fruit_fly", "trees", "random", "community"]
     else:
         social_datasets = [
-            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
             transforms(EgoDataset(os.getcwd() + '/original_datasets/' + 'twitch_egos', stage=stage, num=num)),
+            transforms(FacebookDataset(os.getcwd() + '/original_datasets/' + 'facebook_large', stage=stage, num=num)),
             transforms(CoraDataset(os.getcwd() + '/original_datasets/' + 'cora', stage=stage, num=num)),
             transforms(RoadDataset(os.getcwd() + '/original_datasets/' + 'roads', stage=stage, num=num)),
             transforms(NeuralDataset(os.getcwd() + '/original_datasets/' + 'fruit_fly', stage=stage, num=num)),
@@ -109,7 +109,7 @@ def get_social_datasets(transforms, num, stage = "train", exclude = None):
             transforms(RandomDataset(os.getcwd() + '/original_datasets/' + 'random', stage=stage, num=num)),
             transforms(CommunityDataset(os.getcwd() + '/original_datasets/' + 'community', stage=stage, num=num))
             ]
-        names = ["facebook_large", "twitch_egos", "cora", "roads", "fruit_fly", "trees", "random", "community"]
+        names = ["twitch_egos","facebook_large",  "cora", "roads", "fruit_fly", "trees", "random", "community"]
 
     return social_datasets, names
 

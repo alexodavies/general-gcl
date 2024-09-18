@@ -621,8 +621,9 @@ class GeneralEmbeddingEvaluation():
 	def centroid_similarities(self, embeddings, names):
 		embed_dim = embeddings[0].shape[1]
 		centroids = np.zeros((len(embeddings), embed_dim))
-
+		
 		for i, embedding in enumerate(embeddings):
+			assert np.sum(np.isnan(embedding)) == 0, f"Node features contain NaNs: {embedding}, dataset: {names[i]}, num nans {np.sum(np.isnan(embedding))}"
 			centroids[i, :] = np.mean(embedding, axis = 0)
 
 		pairwise_similarities = cosine_similarity(centroids)
