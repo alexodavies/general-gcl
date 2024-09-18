@@ -56,11 +56,12 @@ class LaplacianEigenvectorPEBatch:
 			laplacian = degree_matrix - adj_matrix
 
 			# Regularize the Laplacian to prevent numerical issues
-			eps = 1e-5
+			eps = 1e-3
 			laplacian = laplacian + eps * torch.eye(num_graph_nodes, device=device)
 
 			# Compute eigenvectors using a dense Laplacian
 			laplacian_cpu = laplacian.to('cpu')  # Perform eigen decomposition on CPU
+			
 			eigenvalues, eigenvectors = torch.linalg.eigh(laplacian_cpu)
 
 			# Select the smallest non-zero eigenvectors for positional encoding
