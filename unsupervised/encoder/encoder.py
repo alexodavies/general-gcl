@@ -50,7 +50,7 @@ class LaplacianEigenvectorPEBatch:
 
 			# The removal of edges is encoded through edge weight
 			weight_based_mask = edge_weight[edge_mask] < 0.5 if edge_weight is not None else torch.ones(sub_edge_index.shape[1]).to(torch.bool)
-			sub_edge_index = edge_index[:, weight_based_mask]
+			sub_edge_index = sub_edge_index[:, weight_based_mask]
 			# sub_edge_weight = edge_weight[edge_mask] if edge_weight is not None else None
 
 			# Convert to a dense adjacency matrix
