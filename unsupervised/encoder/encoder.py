@@ -45,11 +45,17 @@ class LaplacianEigenvectorPEBatch:
 
 			# Get the subgraph's edge_index and edge_weight
 			edge_mask = graph_mask[edge_index[0]] & graph_mask[edge_index[1]]
+
 			sub_edge_index = edge_index[:, edge_mask]
-			sub_edge_weight = edge_weight[edge_mask] if edge_weight is not None else None
+
+			# The removal of edges is encoded through edge weight
+			weight_based_mask = edge_weight[edge_mask] < 0.5 if edge_weight is not None else torch.ones(sub_edge_index.shape[0])
+			sub_edge_index = edge_index[:, weight_based_mask]
+			# sub_edge_weight = edge_weight[edge_mask] if edge_weight is not None else None
 
 			# Convert to a dense adjacency matrix
-			adj_matrix = to_dense_adj(sub_edge_index, max_num_nodes=num_graph_nodes, edge_attr=sub_edge_weight).squeeze(0)
+			# adj_matrix = to_dense_adj(sub_edge_index, max_num_nodes=num_graph_nodes, edge_attr=sub_edge_weight).squeeze(0)
+			adj_matrix = to_dense_adj(sub_edge_index, max_num_nodes=num_graph_nodes).squeeze(0)
 
 			# Compute the degree matrix (D) and Laplacian (L = D - A)
 			degree_matrix = torch.diag(adj_matrix.sum(dim=1))
@@ -58,6 +64,7 @@ class LaplacianEigenvectorPEBatch:
 			# Regularize the Laplacian to prevent numerical issues
 			eps = 1e-3
 			laplacian = laplacian + eps * torch.eye(num_graph_nodes, device=device)
+			assert torch.isfinite(laplacian).all(), "Laplacian matrix contains NaNs or Infs"
 
 			# Compute eigenvectors using a dense Laplacian
 			laplacian_cpu = laplacian.to('cpu')  # Perform eigen decomposition on CPU
