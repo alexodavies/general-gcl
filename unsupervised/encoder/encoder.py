@@ -358,7 +358,7 @@ class Encoder(torch.nn.Module):
 		x = self.atom_encoder(x.to(torch.int))
 		if self.convolution == GPSConv:
 			# self, edge_index, batch, num_nodes, edge_weight=None
-			pe_x = self.pe_transform.compute_positional_encoding(edge_index, batch, x.shape[0], edge_weight=edge_weight)
+			pe_x = self.pe_transform.compute_positional_encoding(x, edge_index, edge_weight=edge_weight, batch=batch)
 			pe_x = self.pe_norm(pe_x)
 			pe_x = self.pe_lin(pe_x)
 			assert torch.isfinite(pe_x).all(), "Positional encoding pe_x contains NaNs or Infs"
