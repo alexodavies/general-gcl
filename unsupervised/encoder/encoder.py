@@ -231,7 +231,7 @@ class Encoder(torch.nn.Module):
 
 		if convolution == "gps" or convolution == "gin":	
 			emb_dim = np.around(emb_dim / 4).astype(int) * 4
-			self.pe_transform = LaplacianEigenvectorPEBatch(num_eigenvectors=pos_features)
+			self.pe_transform = AddRandomWalkPE(walk_length=4)
 			self.pe_lin = Linear(pos_features, pe_dim)
 			self.pe_norm = torch.nn.BatchNorm1d(pos_features)
 		
