@@ -224,14 +224,14 @@ class Encoder(torch.nn.Module):
 	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
 				 pooling_type="standard", is_infograph=False,
 				 convolution="gin", edge_dim=1,
-				 pos_features = 8, pe_dim = 8):
+				 pos_features = 4, pe_dim = 8):
 		super(Encoder, self).__init__()
 
 		self.pooling_type = pooling_type
 
 		if convolution == "gps" or convolution == "gin":	
 			emb_dim = np.around(emb_dim / 4).astype(int) * 4
-			self.pe_transform = AddRandomWalkPE(walk_length=4)
+			self.pe_transform = AddRandomWalkPE(walk_length=pos_features)
 			self.pe_lin = Linear(pos_features, pe_dim)
 			self.pe_norm = torch.nn.BatchNorm1d(pos_features)
 		
