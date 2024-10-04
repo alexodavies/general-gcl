@@ -9,7 +9,7 @@ from datetime import datetime
 from torch_geometric.data import DataLoader
 from matplotlib.colors import LogNorm
 
-from datasets.loaders import get_chemical_datasets, get_val_loaders, get_test_loaders
+from datasets.loaders import get_chemical_datasets, get_val_datasets, get_test_datasets, get_train_datasets
 
 from noisenoise import add_weighted_noise_to_dataset, compute_onehot_probabilities, compute_onehot_probabilities_edge, add_noise_to_dataset
 from unsupervised.utils import initialize_edge_weight
@@ -282,11 +282,15 @@ if __name__ == "__main__":
     my_transforms = Compose([initialize_edge_weight])
 
     # Get X_datasets returns (datasets, names of datasets)
-    test_datasets = get_chemical_datasets(my_transforms, -1, "test")
+    # Train should be 50k samples, val 5k, test 2k
+    test_datasets = get_test_datasets(my_transforms, 2000)
     test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
 
-    val_datasets = get_chemical_datasets(my_transforms, -1, "val")
+    val_datasets = get_val_datasets(my_transforms, 5000)
     val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
+
+    train_datasets = get_train_datasets(my_transforms, 50000)
+    train_datasets = [DataLoader(data, batch_size=64) for data in train_datasets[0]]
 
     # Setup wandb
     setup_wandb(vars(args), offline=False, name="noise-noise")
