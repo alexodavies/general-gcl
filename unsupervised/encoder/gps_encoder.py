@@ -26,7 +26,165 @@ from torch_geometric.utils import (
     to_torch_csr_tensor,
 )
 
+class LaplacianEigenvectorPEBatch:
+	def __init__(self, num_eigenvectors=5):
+		self.num_eigenvectors = num_eigenvectors
 
+	def compute_positional_encoding(self, edge_index, batch, num_nodes, edge_weight=None):
+		device = edge_index.device
+		pe_batch = torch.zeros((num_nodes, self.num_eigenvectors), device=device)
+
+		# Iterate through each graph in the batch
+		for i in range(batch.max().item() + 1):
+			graph_mask = (batch == i)
+			graph_nodes = torch.where(graph_mask)[0]
+			num_graph_nodes = len(graph_nodes)
+
+			if num_graph_nodes < 2:  # Skip small graphs
+				continue
+
+			# Get the subgraph's edge_index and edge_weight
+			edge_mask = graph_mask[edge_index[0]] & graph_mask[edge_index[1]]
+
+			sub_edge_index = edge_index[:, edge_mask]
+
+			# The removal of edges is encoded through edge weight
+			weight_based_mask = edge_weight[edge_mask] < 0.5 if edge_weight is not None else torch.ones(sub_edge_index.shape[1]).to(torch.bool)
+			sub_edge_index = sub_edge_index[:, weight_based_mask]
+			# sub_edge_weight = edge_weight[edge_mask] if edge_weight is not None else None
+
+			# Convert to a dense adjacency matrix
+			# adj_matrix = to_dense_adj(sub_edge_index, max_num_nodes=num_graph_nodes, edge_attr=sub_edge_weight).squeeze(0)
+			adj_matrix = to_dense_adj(sub_edge_index, max_num_nodes=num_graph_nodes).squeeze(0)
+
+			# Compute the degree matrix (D) and Laplacian (L = D - A)
+			degree_matrix = torch.diag(adj_matrix.sum(dim=1))
+			laplacian = degree_matrix - adj_matrix
+
+			# Regularize the Laplacian to prevent numerical issues
+			eps = 1e-3
+			laplacian = laplacian + eps * torch.eye(num_graph_nodes, device=device)
+			assert torch.isfinite(laplacian).all(), "Laplacian matrix contains NaNs or Infs"
+
+			# Compute eigenvectors using a dense Laplacian
+			laplacian_cpu = laplacian.to('cpu')  # Perform eigen decomposition on CPU
+			
+			eigenvalues, eigenvectors = torch.linalg.eigh(laplacian_cpu)
+
+			# Select the smallest non-zero eigenvectors for positional encoding
+			pe = eigenvectors[:, 1:self.num_eigenvectors + 1]
+
+			# Normalize the positional encoding to have zero mean and unit variance
+			pe = (pe - pe.mean(dim=0)) / pe.std(dim=0)
+
+			if pe.size(1) < self.num_eigenvectors:
+				padding = torch.zeros(pe.size(0), self.num_eigenvectors - pe.size(1), device=pe.device)
+				pe = torch.cat([pe, padding], dim=1)
+			# Assign positional encodings to the correct nodes in the batch
+			pe_batch[graph_mask] = pe.to(device)
+
+		return pe_batch
+
+
+class AddRandomWalkPE:
+	def __init__(self, walk_length=5, attr_name='random_walk_pe'):
+		"""
+		Initialize the RandomWalkPositionalEncoding class for batched graphs.
+
+		Args:
+			walk_length (int): Number of random walk steps.
+			attr_name (str): Attribute name for positional encodings.
+		"""
+		self.walk_length = walk_length
+		self.attr_name = attr_name
+
+	def compute_positional_encoding(self, x, edge_index, edge_weight=None, batch=None):
+		"""
+		Compute Random Walk Positional Encoding (RWPE) for a batch of graphs.
+
+		Args:
+			x (torch.Tensor): Node features (shape: [num_nodes, num_features]).
+			edge_index (torch.Tensor): Edge indices in COO format (shape: [2, num_edges]).
+			edge_weight (torch.Tensor, optional): Edge weights, if any (shape: [num_edges]). Default is None.
+			batch (torch.Tensor): Batch vector that maps each node to a specific graph (shape: [num_nodes]).
+
+		Returns:
+			torch.Tensor: The random walk positional encoding for all graphs in the batch.
+		"""
+		device = edge_index.device
+		batch_size = batch.max().item() + 1  # Number of graphs in the batch
+		num_nodes = x.size(0)  # Total number of nodes across all graphs
+
+		# Create dense adjacency matrices (including edge weights if provided)
+		adj_matrices = to_dense_adj(edge_index, batch=batch, edge_attr=edge_weight)
+
+		# Initialize a tensor to store positional encodings for each node in the batch
+		pe_batch = torch.zeros((num_nodes, self.walk_length), device=device)
+
+		# Iterate through each graph in the batch
+		for i in range(batch_size):
+			adj = adj_matrices[i]  # Get the adjacency matrix for the i-th graph
+			row_sum = adj.sum(dim=1, keepdim=True)
+			adj = adj / row_sum.clamp(min=1e-9)  # Normalize rows to sum to 1	
+
+			adj = adj + torch.eye(adj.shape[0], device=device)
+
+			# Identify nodes belonging to this graph
+			graph_mask = (batch == i)
+			num_graph_nodes = graph_mask.sum().item()  # Number of nodes in this graph
+
+			# If the graph has no nodes, skip it
+			if num_graph_nodes == 0:
+				continue
+
+			# Create identity matrix for self-loops
+			loop_index = torch.arange(num_graph_nodes, device=device)
+
+			# Function to extract diagonal elements (self-loop probabilities)
+			def get_pe(out):
+				return out[loop_index, loop_index]
+
+			# Initialize the positional encoding for this graph
+			out = adj
+			out = torch.clamp(out, min=-1e6, max=1e6)
+			pe_list = [get_pe(out)]  # Start with step 0
+
+			# Perform random walks
+			for _ in range(self.walk_length - 1):
+				out = out @ adj  # Multiply adjacency matrix with itself
+				pe_list.append(get_pe(out))  # Get the diagonal
+			# pe = torch.where(graph_mask, pe, torch.zeros_like(pe))  # Zero encoding for isolated nodes
+			# Stack the positional encodings for the current graph
+			pe = torch.stack(pe_list, dim=-1)  # Shape: (num_graph_nodes, walk_length)
+			
+
+			# Assign the result to the corresponding nodes in the batch
+			pe_batch[graph_mask] = pe
+		assert torch.isfinite(pe_batch).all(), "NaNs or Infs detected in positional encoding"
+		return pe_batch  # Shape: (num_nodes, walk_length)
+
+# GraphGPS results are not listed in current works
+# Only used for attention with GPSConv
+class RedrawProjection:
+    def __init__(self, model: torch.nn.Module,
+                 redraw_interval: Optional[int] = None):
+        self.model = model
+        self.redraw_interval = redraw_interval
+        self.num_last_redraw = 0
+
+    def redraw_projections(self):
+        if not self.model.training or self.redraw_interval is None:
+            return
+        if self.num_last_redraw >= self.redraw_interval:
+            fast_attentions = [
+                module for module in self.model.modules()
+                if isinstance(module, PerformerAttention)
+            ]
+            for fast_attention in fast_attentions:
+                fast_attention.redraw_projection_matrix()
+            self.num_last_redraw = 0
+            return
+        self.num_last_redraw += 1
 
 class Encoder(torch.nn.Module):
 	"""
@@ -70,6 +228,13 @@ class Encoder(torch.nn.Module):
 		super(Encoder, self).__init__()
 
 		self.pooling_type = pooling_type
+
+		if convolution == "gps" or convolution == "gin":	
+			emb_dim = np.around(emb_dim / 4).astype(int) * 4
+			self.pe_transform = AddRandomWalkPE(walk_length=pos_features)
+			self.pe_lin = Linear(pos_features, pe_dim)
+			self.pe_norm = torch.nn.BatchNorm1d(pos_features)
+		
 		self.emb_dim = emb_dim
 		self.num_gc_layers = num_gc_layers
 		self.drop_ratio = drop_ratio
@@ -127,6 +292,28 @@ class Encoder(torch.nn.Module):
 				bn = torch.nn.BatchNorm1d(emb_dim)
 				self.bns.append(bn)
 
+		elif convolution == "gps":
+			print(f"Using GPS with GIN backbone for {num_gc_layers} layers")
+			self.convolution = GPSConv
+
+			for i in range(num_gc_layers):
+				nn = Sequential(Linear(emb_dim, 2 * emb_dim), torch.nn.BatchNorm1d(2 * emb_dim), ReLU(),
+								Linear(2 * emb_dim, emb_dim))
+				conv = GPSConv(emb_dim,
+				   				GINEConv(nn),
+								heads = 4,
+								attn_type="performer",
+								act = "leaky_relu",  # to allow small gradients even for negative inputs
+								act_kwargs = {"negative_slope": 0.01},  # if using LeakyReLU)
+								# dropout=0.3
+								)
+				bn = torch.nn.BatchNorm1d(emb_dim)
+				self.convs.append(conv)
+				self.bns.append(bn)
+
+			self.redraw_projection = RedrawProjection(
+										self.convs,
+										redraw_interval=20000)
 
 		else:	
 			raise NotImplementedError
@@ -169,6 +356,15 @@ class Encoder(torch.nn.Module):
 
 		# print(x, x.shape)
 		x = self.atom_encoder(x.to(torch.int))
+		if self.convolution == GPSConv:
+			# self, edge_index, batch, num_nodes, edge_weight=None
+			pe_x = self.pe_transform.compute_positional_encoding(x, edge_index, edge_weight=edge_weight, batch=batch)
+			pe_x = self.pe_norm(pe_x)
+			pe_x = self.pe_lin(pe_x)
+			assert torch.isfinite(pe_x).all(), "Positional encoding pe_x contains NaNs or Infs"
+			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {pe_x}, num nans: {torch.sum(torch.isnan(pe_x))}"
+			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}"
+			x = torch.cat([x, pe_x], dim=1)
 
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN
@@ -186,6 +382,8 @@ class Encoder(torch.nn.Module):
 				x = self.convs[i](x, edge_index, edge_weight)
 			elif self.convolution == GATv2Conv:
 				x = self.convs[i](x, edge_index)
+			elif self.convolution == GPSConv:
+				x = self.convs[i](x, edge_index, batch, edge_attr = edge_attr, edge_weight = edge_weight)
 
 				assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}, {torch.min(x)}, {torch.max(x)}"
 
