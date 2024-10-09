@@ -30,6 +30,7 @@ import yaml
 import wandb
 
 from umap import UMAP
+from sklearn.decomposition import PCA
 
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
@@ -178,7 +179,7 @@ def plot_projections(embedding_store, names, actual_names, mol_color_dict, color
       # Adjust bottom to make space for the legend
 
     # Save the figure
-    plt.savefig(f"outputs/everyone.png", dpi=300)
+    plt.savefig(f"outputs/everyone-pca.png", dpi=300)
 
 
 def plot_projections_with_centroids(embedding_store, names, actual_names, mol_color_dict, color_dict):
@@ -255,7 +256,7 @@ def plot_projections_with_centroids(embedding_store, names, actual_names, mol_co
       # Adjust bottom to make space for the legend
 
     # Save the figure
-    plt.savefig(f"outputs/everyone_centroids.png", dpi=300)
+    plt.savefig(f"outputs/everyone_centroids-pca.png", dpi=300)
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
@@ -445,7 +446,7 @@ def run(args):
         fig, ax = plt.subplots(figsize = (6,7))
         ax.set_title(f"{actual_names[i_check]} (NC: {n_clusters})")
 
-        ump = UMAP(n_components = 2, n_neighbors=50, n_jobs=8).fit(all_embeddings)
+        ump = PCA(n_components=2).fit(all_embeddings) # UMAP(n_components = 2, n_neighbors=50, n_jobs=8).fit(all_embeddings)
         projections = []
         for i_emb, embedding in enumerate(tqdm(separate_embeddings)):
             proj = ump.transform(embedding)
@@ -479,7 +480,7 @@ def run(args):
             shadow = True, bbox_to_anchor=(0.05, -0.2), loc='lower left', ncols = 3, frameon = False)
 
         plt.tight_layout()
-        plt.savefig(f"outputs/{actual_name}.png", dpi=300)
+        plt.savefig(f"outputs/{actual_name}-pca.png", dpi=300)
 
         embedding_store.append(projections)
     plot_projections_with_centroids(embedding_store, names, actual_names, mol_color_dict, color_dict)

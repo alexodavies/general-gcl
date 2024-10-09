@@ -30,7 +30,7 @@ class LaplacianEigenvectorPEBatch:
 	def __init__(self, num_eigenvectors=5):
 		self.num_eigenvectors = num_eigenvectors
 
-	def compute_positional_encoding(self, edge_index, batch, num_nodes, edge_weight=None):
+	def forward(self, edge_index, batch, num_nodes, edge_weight=None):
 		device = edge_index.device
 		pe_batch = torch.zeros((num_nodes, self.num_eigenvectors), device=device)
 
@@ -98,7 +98,7 @@ class AddRandomWalkPE:
 		self.walk_length = walk_length
 		self.attr_name = attr_name
 
-	def compute_positional_encoding(self, x, edge_index, edge_weight=None, batch=None):
+	def forward(self, x, edge_index, edge_weight=None, batch=None):
 		"""
 		Compute Random Walk Positional Encoding (RWPE) for a batch of graphs.
 
@@ -186,11 +186,12 @@ class RedrawProjection:
             return
         self.num_last_redraw += 1
 
-class Encoder(torch.nn.Module):
+class GPSEncoder(torch.nn.Module):
 	"""
 	Encoder module for graph neural networks.
 
 	Args:
+		pe_encoder (object): A class that has a forward method to produce node vectors for positional encodings.
 		emb_dim (int): The dimensionality of the node embeddings.
 		num_gc_layers (int): The number of graph convolutional layers.
 		drop_ratio (float): The dropout ratio.
@@ -221,26 +222,24 @@ class Encoder(torch.nn.Module):
 
 	"""
 
-	def __init__(self, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
+	def __init__(self, pe_encoder, emb_dim=300, num_gc_layers=5, drop_ratio=0.0,
 				 pooling_type="standard", is_infograph=False,
 				 convolution="gin", edge_dim=1,
 				 pos_features = 4, pe_dim = 8):
-		super(Encoder, self).__init__()
+		super(GPSEncoder, self).__init__()
 
 		self.pooling_type = pooling_type
 
 		if convolution == "gps" or convolution == "gin":	
 			emb_dim = np.around(emb_dim / 4).astype(int) * 4
-			self.pe_transform = AddRandomWalkPE(walk_length=pos_features)
-			self.pe_lin = Linear(pos_features, pe_dim)
-			self.pe_norm = torch.nn.BatchNorm1d(pos_features)
+			self.pe_transform = pe_encoder # AddRandomWalkPE(walk_length=pos_features)
+			# self.pe_lin = Linear(pos_features, pe_dim)
+			# self.pe_norm = torch.nn.BatchNorm1d(pos_features)
 		
 		self.emb_dim = emb_dim
 		self.num_gc_layers = num_gc_layers
 		self.drop_ratio = drop_ratio
 		self.is_infograph = is_infograph
-
-
 
 		self.out_node_dim = self.emb_dim
 		if self.pooling_type == "standard":
@@ -262,61 +261,28 @@ class Encoder(torch.nn.Module):
 		self.bond_encoder = BondEncoder(emb_dim)
 		self.edge_dim = edge_dim
 
-		if convolution == "gin":
-			# print(f"Using GIN backbone for {num_gc_layers} layers")
-			self.convolution = GINEConv
 
-			for i in range(num_gc_layers):
-				nn = Sequential(Linear(emb_dim, 2 * emb_dim), torch.nn.BatchNorm1d(2 * emb_dim), ReLU(),
-								Linear(2 * emb_dim, emb_dim))
-				conv = GINEConv(nn)
-				bn = torch.nn.BatchNorm1d(emb_dim)
-				self.convs.append(conv)
-				self.bns.append(bn)
+		self.convolution = GPSConv
 
-		elif convolution == "gcn":
-			print(f"Using GCN backbone for {num_gc_layers} layers")
-			self.convolution = GCNConv
+		for i in range(num_gc_layers):
+			nn = Sequential(Linear(emb_dim, 2 * emb_dim), torch.nn.BatchNorm1d(2 * emb_dim), ReLU(),
+							Linear(2 * emb_dim, emb_dim))
+			conv = GPSConv(emb_dim,
+							GINEConv(nn),
+							heads = 4,
+							attn_type="performer",
+							act = "leaky_relu",  # to allow small gradients even for negative inputs
+							act_kwargs = {"negative_slope": 0.01},  # if using LeakyReLU)
+							# dropout=0.3
+							)
+			bn = torch.nn.BatchNorm1d(emb_dim)
+			self.convs.append(conv)
+			self.bns.append(bn)
 
-			for i in range(num_gc_layers):
-				self.convs.append(GCNConv(emb_dim, emb_dim))
-				bn = torch.nn.BatchNorm1d(emb_dim)
-				self.bns.append(bn)
+		self.redraw_projection = RedrawProjection(
+									self.convs,
+									redraw_interval=20000)
 
-		elif convolution == "gat":
-			print(f"Using GAT backbone for {num_gc_layers} layers")
-			self.convolution = GATv2Conv
-
-			for i in range(num_gc_layers):
-				self.convs.append(GATv2Conv(emb_dim, emb_dim))
-				bn = torch.nn.BatchNorm1d(emb_dim)
-				self.bns.append(bn)
-
-		elif convolution == "gps":
-			print(f"Using GPS with GIN backbone for {num_gc_layers} layers")
-			self.convolution = GPSConv
-
-			for i in range(num_gc_layers):
-				nn = Sequential(Linear(emb_dim, 2 * emb_dim), torch.nn.BatchNorm1d(2 * emb_dim), ReLU(),
-								Linear(2 * emb_dim, emb_dim))
-				conv = GPSConv(emb_dim,
-				   				GINEConv(nn),
-								heads = 4,
-								attn_type="performer",
-								act = "leaky_relu",  # to allow small gradients even for negative inputs
-								act_kwargs = {"negative_slope": 0.01},  # if using LeakyReLU)
-								# dropout=0.3
-								)
-				bn = torch.nn.BatchNorm1d(emb_dim)
-				self.convs.append(conv)
-				self.bns.append(bn)
-
-			self.redraw_projection = RedrawProjection(
-										self.convs,
-										redraw_interval=20000)
-
-		else:	
-			raise NotImplementedError
 
 		self.init_emb()
 
@@ -353,20 +319,22 @@ class Encoder(torch.nn.Module):
 
 		assert torch.isfinite(x).all(), "Input node features contain NaNs or Infs"
 		assert torch.isfinite(edge_attr).all(), "Input edge attributes contain NaNs or Infs"
+		
+		pe_x = self.pe_transform.forward(x, edge_index, edge_attr, edge_weight=edge_weight)[0]
 
 		# print(x, x.shape)
 		x = self.atom_encoder(x.to(torch.int))
-		if self.convolution == GPSConv:
-			# self, edge_index, batch, num_nodes, edge_weight=None
-			pe_x = self.pe_transform.compute_positional_encoding(x, edge_index, edge_weight=edge_weight, batch=batch)
-			pe_x = self.pe_norm(pe_x)
-			pe_x = self.pe_lin(pe_x)
-			assert torch.isfinite(pe_x).all(), "Positional encoding pe_x contains NaNs or Infs"
-			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {pe_x}, num nans: {torch.sum(torch.isnan(pe_x))}"
-			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}"
-			x = torch.cat([x, pe_x], dim=1)
-
 		edge_attr = self.bond_encoder(edge_attr.to(torch.int))
+		# self, edge_index, batch, num_nodes, edge_weight=None
+		
+		# pe_x = self.pe_norm(pe_x)
+		# pe_x = self.pe_lin(pe_x)
+		assert torch.isfinite(pe_x).all(), "Positional encoding pe_x contains NaNs or Infs"
+		assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {pe_x}, num nans: {torch.sum(torch.isnan(pe_x))}"
+		assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}"
+		x = torch.cat([x, pe_x], dim=1)
+
+		# edge_attr = self.bond_encoder(edge_attr.to(torch.int))
 		# compute node embeddings using GNN
 		xs = []
 		for i in range(self.num_gc_layers):
@@ -375,17 +343,10 @@ class Encoder(torch.nn.Module):
 				assert torch.sum(torch.isnan(x[ix, :])) == 0 , f"X contain NaNs: {x[ix, :]}, num nans: {torch.sum(torch.isnan(x[ix, :]))}, layer {i}, Item {ix}"
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
+			
+			x = self.convs[i](x, edge_index, batch, edge_attr = edge_attr, edge_weight = edge_weight)
 
-			if self.convolution == GINEConv:
-				x = self.convs[i](x, edge_index, edge_attr, edge_weight)
-			elif self.convolution == GCNConv:
-				x = self.convs[i](x, edge_index, edge_weight)
-			elif self.convolution == GATv2Conv:
-				x = self.convs[i](x, edge_index)
-			elif self.convolution == GPSConv:
-				x = self.convs[i](x, edge_index, batch, edge_attr = edge_attr, edge_weight = edge_weight)
-
-				assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}, {torch.min(x)}, {torch.max(x)}"
+			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}, {torch.min(x)}, {torch.max(x)}"
 
 			
 			x = self.bns[i](x)

@@ -31,7 +31,8 @@ from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from utils import setup_wandb
-
+from torch_geometric.nn import GPSConv
+from unsupervised.encoder import FeaturedTransferModel, ToPPE, GPSEncoder
 
 from utils import summarize_model
 
@@ -109,6 +110,9 @@ def train_epoch_random_edges(dataloader,
         model_loss.backward()
         model_optimizer.step()
 
+        batch.to("cpu")
+
+
     return model_loss_all, -1., -1.
 
 
@@ -167,6 +171,9 @@ def train_epoch_random_nodes(dataloader,
         model_loss.backward()
         model_optimizer.step()
 
+        batch.to("cpu")
+
+
     return model_loss_all, -1., -1.
 
 def train_epoch_adgcl(dataloader,
@@ -193,6 +200,9 @@ def train_epoch_adgcl(dataloader,
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if model.encoder.convolution  == GPSConv:
+        print("Model is GPSConv")
+
     
     for batch in tqdm(dataloader, leave = False):
         # set up
@@ -269,6 +279,9 @@ def train_epoch_adgcl(dataloader,
         model_loss.backward()
         model_optimizer.step()
 
+        if model.encoder.convolution  == GPSConv:
+        		# if self.convolution:
+            model.encoder.redraw_projection.redraw_projections()
 
         batch.to("cpu")
 
@@ -327,9 +340,27 @@ def run(args):
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
 
+
+    checkpoint = args.checkpoint
+    evaluation_node_features = args.node_features
+
+    pe_dim = 8
+
+    pe_encoder = ToPPE(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gin"),
+                        proj_hidden_dim=args.proj_dim, output_dim=pe_dim).to(device)
+    
+    checkpoint_path = f"outputs/{checkpoint}"
+    model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    pe_encoder.load_state_dict(model_dict['encoder_state_dict'], strict=False)
+
+
+
     # View learner and encoder use the same basic architecture
-    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
-                        proj_hidden_dim=args.proj_dim).to(device)
+    # model = GInfoMinMax(GPSEncoder(pe_encoder, emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gps", pe_dim=pe_dim),
+    #                     proj_hidden_dim=args.proj_dim).to(device)
+    # View learner and encoder use the same basic architecture
+    model = GInfoMinMax(GPSEncoder(pe_encoder, emb_dim=64, num_gc_layers=4, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gps", pe_dim=pe_dim),
+                        proj_hidden_dim=64).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
     summarize_model(model)
@@ -339,6 +370,7 @@ def run(args):
         view_learner = ViewLearner(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
                                    mlp_edge_model_dim=args.mlp_edge_model_dim).to(device)
         view_optimizer = torch.optim.Adam(view_learner.parameters(), lr=args.view_lr)
+
 
     # General evaluation - handles multiple downstream tasks during validation
     # This includes both regression and classification based on the graph labels present
@@ -487,6 +519,10 @@ def arg_parse():
     parser.add_argument(
         '--exclude', type = str, default='None', help = 'Which social dataset to exclude (for ablation study) ("facebook_large", "twitch_egos", "cora", "roads", "fruit_fly")'
     )
+
+    parser.add_argument('--checkpoint', type=str, default="untrained",
+                         help='The name of the trained model checkpoint in ./outputs/ used for positional encoding (can be "untrained")')
+
 
     parser.add_argument('--seed', type=int, default=0)
 
