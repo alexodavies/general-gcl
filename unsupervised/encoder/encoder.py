@@ -26,7 +26,7 @@ from torch_geometric.utils import (
     to_torch_csr_tensor,
 )
 
-
+from tqdm import tqdm
 
 class Encoder(torch.nn.Module):
 	"""
@@ -234,7 +234,7 @@ class Encoder(torch.nn.Module):
 		ret = []
 		y = []
 		with torch.no_grad():
-			for i, data in enumerate(loader):
+			for i, data in enumerate(tqdm(loader, colour="Blue", leave = False)):
 				if i % every != 0:
 					continue
 

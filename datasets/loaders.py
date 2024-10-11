@@ -259,3 +259,13 @@ def get_train_datasets(transforms, num = 2000):
 
     return datasets, ogbg_names + social_names
 
+def get_train_loaders(batch_size, transforms, num = 2000):
+
+    chemical_datasets, ogbg_names = get_chemical_datasets(transforms, num, stage="train")
+    social_datasets, social_names = get_social_datasets(transforms, num, stage="train")
+
+    datasets = chemical_datasets + social_datasets
+    datasets = [DataLoader(data, batch_size=batch_size) for data in datasets]
+
+    return datasets, ogbg_names + social_names
+

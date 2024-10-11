@@ -34,8 +34,8 @@ from umap import UMAP
 from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
-from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims
-from datasets.loaders import get_val_loaders, get_test_loaders
+from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims, visualize_grid_with_labels
+from datasets.loaders import get_val_loaders, get_test_loaders, get_test_datasets, get_train_loaders, get_train_datasets, get_val_datasets
 
 
 from sklearn.metrics import roc_auc_score, mean_squared_error
@@ -45,6 +45,8 @@ from unsupervised.learning import GInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.encoder import FeaturedTransferModel
 from torch.nn import MSELoss, BCELoss, Sigmoid
+
+from torch_geometric.utils import remove_self_loops
 
 from sklearn.cluster import HDBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
@@ -101,7 +103,7 @@ def get_emb_y(loader, encoder, device, dtype='numpy', is_rand_label=False, every
 	else:
 		raise NotImplementedError
     
-def get_embeddings(encoder, loaders):
+def get_embeddings(encoder, loaders, num = -1):
     encoder.eval()
     all_embeddings = None
     separate_embeddings = []
@@ -110,6 +112,10 @@ def get_embeddings(encoder, loaders):
         train_emb, train_y = get_emb_y(loader, encoder,
          "cuda" if torch.cuda.is_available() else "cpu",
           is_rand_label=False, every=1)
+        
+        if num != -1 or num >= train_emb.shape[0]:
+            num = train_emb.shape[0]
+        train_emb = train_emb[:num, :]
 
         separate_embeddings.append(train_emb)
         if all_embeddings is None:
@@ -341,7 +347,7 @@ def centroid_similarities(embeddings, names, model_name = ""):
 
     plt.savefig(f"outputs/pairwise-similarity_{model_name}.png")
 
-def run(args):
+def run_visualisation(args):
     """
     Run the transfer learning process for a given model checkpoint.
 
@@ -432,18 +438,18 @@ def run(args):
             print(f"Loaded state dict for {checkpoint_path}")
         actual_name = actual_names[i_check]
 
-        all_embeddings, separate_embeddings = get_embeddings(encoder.encoder, val_loaders)
+        all_embeddings, separate_embeddings = get_embeddings(encoder.encoder, val_loaders, num = num)
 
         centroid_similarities(separate_embeddings, names, model_name=actual_name)
 
-        hdbscan_labels = get_hdbscan_labels(all_embeddings)
+        # hdbscan_labels = get_hdbscan_labels(all_embeddings)
         
-        n_clusters = np.unique(hdbscan_labels).shape[0]
+        # n_clusters = np.unique(hdbscan_labels).shape[0]
 
-        hdbscan_cluster_counts.append(n_clusters)
+        # hdbscan_cluster_counts.append(n_clusters)
 
         fig, ax = plt.subplots(figsize = (6,7))
-        ax.set_title(f"{actual_names[i_check]} (NC: {n_clusters})")
+        ax.set_title(f"{actual_names[i_check]}") #  (NC: {n_clusters})")
 
         ump = UMAP(n_components = 2, n_neighbors=50, n_jobs=8).fit(all_embeddings)
         projections = []
@@ -486,7 +492,175 @@ def run(args):
     plot_projections(embedding_store, names, actual_names, mol_color_dict, color_dict)
     
 
+def find_closest_point(target_point, points):
+    n_points = points.shape[0]
+    sims = [cosine_similarity(target_point, points[i, :].reshape(1, -1)) for i in range(n_points)]
+
+    min_point_index = np.argmax(sims)
+    min_point = points[min_point_index, :]
+    distance = sims[min_point_index]
+
+    return min_point, min_point_index, distance
     
+
+
+    
+def run_centroid_graph_visualisation(args):
+    """
+    Run the transfer learning process for a given model checkpoint.
+
+    Args:
+        args: The command line arguments.
+
+    Returns:
+        None
+    """
+
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info("Using Device: %s" % device)
+    logging.info("Seed: %d" % args.seed)
+    logging.info(args)
+
+    # setup_seed(args.seed)
+
+    num = args.num
+    evaluation_node_features = args.node_features
+    print(f"\n\nNode features: {evaluation_node_features}\n\n")
+    num_epochs = int(args.epochs)
+    print(f"Num epochs: {num_epochs}")
+
+    checkpoints = ["all-100.pt"]
+    actual_names = ["ToP-All"]
+
+    # Get datasets
+    my_transforms = Compose([initialize_edge_weight])
+    val_datasets, names = get_val_datasets(my_transforms, num = num)
+    # for dataset in val_datasets:
+
+        # for ig, g in enumerate(dataset):
+        #     edges, edge_attr = g.edge_index, g.edge_attr
+        #     new_edges, new_attr = remove_self_loops(edges, edge_attr)
+        #     g.edge_index = new_edges
+        #     g.edge_attr = new_attr
+        #     dataset[ig] = g
+
+
+    print(val_datasets)
+    val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=num)
+    # names = sorted(names)
+    # val_loaders, names = get_val_loaders(args.batch_size, my_transforms, num=2*num)
+
+    # For simplicity only include the largest molecular dataset
+    new_val_loaders, new_names, new_datasets = [], [], []
+    for iname, name in enumerate(names):
+        if "ogb" in name and "molhiv" not in name:
+            continue
+
+        new_val_loaders.append(val_loaders[iname])
+        new_datasets.append(val_datasets[iname])
+        new_names.append(name)
+
+    val_datasets, val_loaders, names = new_datasets, new_val_loaders, new_names
+
+
+    # ogb_names, other_names = [], []
+    # for name in names:
+    #     if "ogb" in name:
+    #         ogb_names.append(name)
+    #     else:
+    #         other_names.append(name)
+
+    # cmap = plt.get_cmap('hsv')
+    # unique_categories = sorted(np.unique(other_names))
+    # colors = cmap(np.linspace(0.2, 0.8, int(len(unique_categories))))
+    # color_dict = {category: color for category, color in zip(unique_categories, colors)}
+
+    # cmap = plt.get_cmap('autumn')
+    # unique_categories = sorted(np.unique(ogb_names))
+    # colors = cmap(np.linspace(0, 1, len(unique_categories)))
+    # mol_color_dict = {category: color for category, color in zip(unique_categories, colors)}
+
+    
+
+
+
+    embedding_store = []
+    hdbscan_cluster_counts = []
+
+    for i_check, checkpoint in enumerate(checkpoints):
+
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if checkpoint == "untrained":
+            checkpoint_path = "untrained"
+
+        else:
+            checkpoint_path = f"outputs/{checkpoint}"
+            cfg_name = checkpoint.split('.')[0] + ".yaml"
+            config_path = f"outputs/{cfg_name}"
+
+            with open(config_path, 'r') as stream:
+                try:
+                    # Converts yaml document to python object
+                    wandb_cfg = yaml.safe_load(stream)
+
+                    # Printing dictionary
+                    print(wandb_cfg)
+                except yaml.YAMLError as e:
+                    print(e)
+
+            args = wandb_cfg_to_actual_cfg(args, wandb_cfg)
+
+        # checkpoint_path = get_encoder(checkpoint, args)
+        model_name = checkpoint_path.split("/")[-1].split(".")[0]
+        encoder = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio,
+        pooling_type=args.pooling_type, convolution=args.backbone), proj_hidden_dim=args.proj_dim).to(device)
+
+
+        if checkpoint_path != "untrained":
+            model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+            encoder.load_state_dict(model_dict['encoder_state_dict'], strict = False)
+            print(f"Loaded state dict for {checkpoint_path}")
+        actual_name = actual_names[i_check]
+
+        all_embeddings, separate_embeddings = get_embeddings(encoder.encoder, val_loaders, num = num)
+
+        centroids = [np.mean(embedding, axis = 0) for embedding in separate_embeddings]
+        # print(centroids)
+        ref_index = np.identity(len(names))
+        ref_sims = np.identity(len(names), dtype = float)
+        ref_embeddings = np.zeros((len(names), len(names), all_embeddings.shape[1]), dtype = float)
+        for icentre1, centre1 in enumerate(tqdm(centroids)):
+            for idataset, embedding in enumerate(tqdm(separate_embeddings)):
+                    name1, name2 = names[icentre1], names[idataset]
+
+                    min_point, min_point_index, distance = find_closest_point(centre1.reshape(1, -1), embedding)
+
+                    ref_index[icentre1, idataset] = min_point_index
+                    ref_sims[icentre1, idataset] = distance
+                    ref_embeddings[icentre1, idataset, :] = min_point
+
+        print(ref_index)
+        print(ref_sims)
+
+        vis_datalist = []
+        for i1 in range(ref_embeddings.shape[0]):
+            for i2 in range(ref_embeddings.shape[1]):
+                index = ref_index[i1, i2]
+                dataset = val_datasets[i2]
+                print(names[i1], names[i2], dataset)
+                datapoint = dataset[int(index)]
+                datapoint.x = torch.ones_like(datapoint.x)
+                vis_datalist.append(datapoint)
+
+        visualize_grid_with_labels(vis_datalist, "outputs/centroid_vis.png", names)
+
+
+
+
+
 
 
 
@@ -549,4 +723,5 @@ def arg_parse():
 
 if __name__ == '__main__':
     args = arg_parse()
-    run(args)
+    # run_visualisation(args)
+    run_centroid_graph_visualisation(args)

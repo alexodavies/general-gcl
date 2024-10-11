@@ -9,6 +9,7 @@ from littleballoffur.exploration_sampling import *
 from tqdm import tqdm
 from rdkit import Chem
 from rdkit.Chem import Draw
+from torch_geometric.utils import remove_self_loops
 from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims
 
 full_atom_feature_dims = get_atom_feature_dims()
@@ -94,6 +95,8 @@ def vis_from_pyg(data, filename = None, ax = None, save = True):
         ax.imshow(im)
 
     ax.axis('off')
+
+    # ax.axis('off')
     # ax.set_title(f"|V|: {g.order()}, |E|: {g.number_of_edges()}")
 
     plt.tight_layout()
@@ -181,6 +184,56 @@ def vis_grid(datalist, filename):
     plt.savefig(filename)
     plt.close()
 
+def visualize_grid_with_labels(datalist, filename, names):
+    """
+    Visualize a set of graphs, from PyTorch Geometric Data objects, with labeled rows and columns.
+
+    Args:
+        datalist: list of pyg.data.Data objects.
+        filename: the path where the visualized grid is saved.
+        names: list of names to use for row and column labels.
+    
+    Returns:
+        None
+    """
+
+    # Calculate grid dimensions
+    grid_dim = int(np.ceil(np.sqrt(len(datalist))))
+
+    # Create subplots
+    fig, axes = plt.subplots(grid_dim, grid_dim, figsize=(10, 10))
+
+    # Unpack axes if there's more than one subplot
+    axes = [num for sublist in axes for num in sublist]
+
+    # Iterate through each axis and data point to visualize the graphs
+    for i_axis, ax in enumerate(axes):
+        if i_axis < len(datalist):
+            name_idx = i_axis % grid_dim
+            # Visualize the data using vis_from_pyg function (assumed to be defined elsewhere)
+            vis_from_pyg(datalist[i_axis], ax=ax, filename=names[name_idx], save=False)
+        else:
+            ax.set_visible(False)  # Hide extra subplots if datalist is not a perfect square
+
+    # Set labels for the rows and columns
+    for i in range(grid_dim):
+        if i < len(names):
+            print(f"Setting axis label: {names[i]}")
+            # Set row labels (Y-axis, left side)
+            plt.setp(axes[i * grid_dim].yaxis, label_position='left')
+            axes[i * grid_dim].set_ylabel(names[i])
+
+            # Set column labels (X-axis, top)
+            plt.setp(axes[i].xaxis, label_position='top')
+            axes[i].set_xlabel(names[i])
+
+    # Adjust layout to prevent overlap of labels and plots
+    plt.tight_layout(pad = 1.15)
+
+    # Save the figure
+    plt.savefig(filename)
+    plt.close()
+
 def better_to_nx(data):
     """
     Converts a pytorch_geometric.data.Data object to a networkx graph,
@@ -193,7 +246,8 @@ def better_to_nx(data):
         g: a networkx.Graph graph
         labels: torch.Tensor of node labels
     """
-    edges = data.edge_index.T.cpu().numpy()
+    edges, _ = remove_self_loops(data.edge_index)
+    edges = edges.T.cpu().numpy()
     labels = data.x[:,0].cpu().numpy()
 
     g = nx.Graph()
