@@ -41,6 +41,7 @@ torch.autograd.set_detect_anomaly(True)
 def warn(*args, **kwargs):
     pass
 import warnings
+import yaml
 warnings.warn = warn
 
 
@@ -345,9 +346,13 @@ def run(args):
     evaluation_node_features = args.node_features
 
     pe_dim = 8
+    model_name = checkpoint.split('.')[0]
+    with open(f"outputs/{model_name}.yaml", "r") as f:
+        pe_args = yaml.safe_load(f)
 
-    pe_encoder = ToPPE(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gin"),
-                        proj_hidden_dim=args.proj_dim, output_dim=pe_dim).to(device)
+
+    pe_encoder = ToPPE(Encoder(emb_dim=pe_args.emb_dim, num_gc_layers=pe_args.num_gc_layers, drop_ratio=pe_args.drop_ratio, pooling_type=pe_args.pooling_type, convolution="gin"),
+                        proj_hidden_dim=pe_args.proj_dim, output_dim=pe_dim).to(device)
     
     checkpoint_path = f"outputs/{checkpoint}"
     model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
