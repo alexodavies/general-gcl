@@ -1,0 +1,10 @@
+numpy <2
+matplotlib
+pandas
+networkx
+torch
+torch-geometric
+tqdm
+openai
+datasets
+scikit-learn
