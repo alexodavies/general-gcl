@@ -353,7 +353,7 @@ def run(args):
     print(pe_args)
     pe_encoder = ToPPE(Encoder(emb_dim=pe_args["emb_dim"]["value"], num_gc_layers=pe_args["num_gc_layers"]["value"],
                                 drop_ratio=pe_args["drop_ratio"]["value"], pooling_type=pe_args["pooling_type"]["value"], convolution="gin"),
-                        proj_hidden_dim=pe_args["proj_dim"], output_dim=pe_dim).to(device)
+                        proj_hidden_dim=pe_args["proj_dim"]["value"], output_dim=pe_dim).to(device)
     
     checkpoint_path = f"outputs/{checkpoint}"
     model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
