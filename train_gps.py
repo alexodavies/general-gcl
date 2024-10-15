@@ -365,8 +365,9 @@ def run(args):
     # model = GInfoMinMax(GPSEncoder(pe_encoder, emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gps", pe_dim=pe_dim),
     #                     proj_hidden_dim=args.proj_dim).to(device)
     # View learner and encoder use the same basic architecture
-    model = GInfoMinMax(GPSEncoder(pe_encoder, emb_dim=64, num_gc_layers=4, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gps", pe_dim=pe_dim),
-                        proj_hidden_dim=64).to(device)
+    model = GInfoMinMax(GPSEncoder(pe_encoder, emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers,
+                                    drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution="gps", pe_dim=pe_dim),
+                        proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
     summarize_model(model)
