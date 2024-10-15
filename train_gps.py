@@ -351,7 +351,8 @@ def run(args):
         pe_args = yaml.safe_load(f)
 
     print(pe_args)
-    pe_encoder = ToPPE(Encoder(emb_dim=pe_args["emb_dim"], num_gc_layers=pe_args["num_gc_layers"], drop_ratio=pe_args["drop_ratio"], pooling_type=pe_args["pooling_type"], convolution="gin"),
+    pe_encoder = ToPPE(Encoder(emb_dim=pe_args["emb_dim"]["value"], num_gc_layers=pe_args["num_gc_layers"]["value"],
+                                drop_ratio=pe_args["drop_ratio"]["value"], pooling_type=pe_args["pooling_type"]["value"], convolution="gin"),
                         proj_hidden_dim=pe_args["proj_dim"], output_dim=pe_dim).to(device)
     
     checkpoint_path = f"outputs/{checkpoint}"
