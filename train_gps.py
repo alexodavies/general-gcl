@@ -462,9 +462,9 @@ def arg_parse():
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
 
-    parser.add_argument('--emb_dim', type=int, default=128,
+    parser.add_argument('--emb_dim', type=int, default=32,
                         help='embedding dimension')
-    parser.add_argument('--proj_dim', type=int, default=128,
+    parser.add_argument('--proj_dim', type=int, default=32,
                         help='projection head dimension')
 
     parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
