@@ -450,14 +450,14 @@ def arg_parse():
                         help='Model Learning rate.')
     parser.add_argument('--view_lr', type=float, default=0.001,
                         help='View Learning rate.')
-    parser.add_argument('--num_gc_layers', type=int, default=6,
+    parser.add_argument('--num_gc_layers', type=int, default=3,
                         help='Number of GNN layers before pooling')
     parser.add_argument('--pooling_type', type=str, default='standard',
                         help='GNN Pooling Type Standard/Layerwise')
 
-    parser.add_argument('--emb_dim', type=int, default=300,
+    parser.add_argument('--emb_dim', type=int, default=128,
                         help='embedding dimension')
-    parser.add_argument('--proj_dim', type=int, default=300,
+    parser.add_argument('--proj_dim', type=int, default=128,
                         help='projection head dimension')
 
     parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
@@ -547,6 +547,6 @@ if __name__ == '__main__':
 
 
     # Change to offline=False to track model training with weights and biases
-    args = setup_wandb(args, name = name + '-' + args.backbone, offline=False)
+    args = setup_wandb(args, name = name, offline=False)
     run(args)
 
