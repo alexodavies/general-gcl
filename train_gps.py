@@ -351,8 +351,8 @@ def run(args):
         pe_args = yaml.safe_load(f)
 
 
-    pe_encoder = ToPPE(Encoder(emb_dim=pe_args.emb_dim, num_gc_layers=pe_args.num_gc_layers, drop_ratio=pe_args.drop_ratio, pooling_type=pe_args.pooling_type, convolution="gin"),
-                        proj_hidden_dim=pe_args.proj_dim, output_dim=pe_dim).to(device)
+    pe_encoder = ToPPE(Encoder(emb_dim=pe_args["emb_dim"], num_gc_layers=pe_args["num_gc_layers"], drop_ratio=pe_args["drop_ratio"], pooling_type=pe_args["pooling_type"], convolution="gin"),
+                        proj_hidden_dim=pe_args["proj_dim"], output_dim=pe_dim).to(device)
     
     checkpoint_path = f"outputs/{checkpoint}"
     model_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
