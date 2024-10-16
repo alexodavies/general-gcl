@@ -6,13 +6,13 @@ import os
 
 # "meta-llama/Llama-3.2-8B-Instruct"
 # "meta-llama/Llama-3.2-1B-Instruct"
-# "OpenDFM/ChemDFM-13B-v1.0"
+# "OpenDFM/ChemDFM-13B-v1.0" # This requires the llama tokenizer (annoying)
 # "facebook/galactica-1.3b"
 
 class LLM:
     def __init__(self, 
                  task_prompt="",
-                 model_name="OpenDFM/ChemDFM-13B-v1.0",
+                 model_name="meta-llama/Llama-3.2-8B-Instruct",
                  save_dir="/mnt/external_disk/models"):
         
         # Create directory if it doesn't exist
