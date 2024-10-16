@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,26 +9,24 @@ import copy
 from datetime import datetime
 from torch_geometric.data import DataLoader
 from matplotlib.colors import LogNorm
-
+print("import 1")
 from datasets.loaders import get_chemical_datasets, get_val_datasets, get_test_datasets, get_train_datasets
 
 from noisenoise import add_weighted_noise_to_dataset, compute_onehot_probabilities, compute_onehot_probabilities_edge, add_noise_to_dataset
 from unsupervised.utils import initialize_edge_weight
 from torch_geometric.transforms import Compose
+print("import 2")
 
-
-from unsupervised.encoder import Encoder
-from unsupervised.encoder import FeaturedTransferModel
 from torch.nn import MSELoss, BCELoss, Sigmoid
 
 import wandb
-
+print("import 3")
 from sklearn.metrics import roc_auc_score, mean_squared_error
 
 import os
 
 from utils import get_total_mol_onehot_dims
-from features_transfer import arg_parse
+# from features_transfer import arg_parse
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
 
 def setup_wandb(cfg, offline = False, name = None):
@@ -42,7 +41,7 @@ def setup_wandb(cfg, offline = False, name = None):
     """
     print(os.getcwd())
     kwargs = {'name': name if name is not None else 'all' + datetime.now().strftime("%m-%d-%Y-%H-%M-%S"),
-               'project': f'noise-noise-molecules',
+               'project': f'LLM-benchmarking',
                  'config': cfg,
               'reinit': True, 'entity':'hierarchical-diffusion',
               'mode':'online' if offline else 'online'}
@@ -273,6 +272,57 @@ def fine_tune(model, checkpoint_path, val_loader, test_loader, name="blank", n_e
 
     return train_losses, val_losses, final_score, best_epoch, best_val_loss
 
+def arg_parse():
+    parser = argparse.ArgumentParser(description='AD-GCL ogbg-mol*')
+
+    parser.add_argument('--dataset', type=str, default='ogbg-molesol',
+                        help='Dataset')
+    parser.add_argument('--model_lr', type=float, default=0.001,
+                        help='Model Learning rate.')
+    parser.add_argument('--view_lr', type=float, default=0.001,
+                        help='View Learning rate.')
+    parser.add_argument('--num_gc_layers', type=int, default=6,
+                        help='Number of GNN layers before pooling')
+    parser.add_argument('--pooling_type', type=str, default='standard',
+                        help='GNN Pooling Type Standard/Layerwise')
+
+    parser.add_argument('--emb_dim', type=int, default=300,
+                        help='embedding dimension')
+    parser.add_argument('--proj_dim', type=int, default=300,
+                        help='projection head dimension')
+
+    parser.add_argument('--mlp_edge_model_dim', type=int, default=64,
+                        help='embedding dimension')
+    parser.add_argument('--batch_size', type=int, default=512,
+                        help='batch size')
+    parser.add_argument('--drop_ratio', type=float, default=0.2,
+                        help='Dropout Ratio / Probability')
+    parser.add_argument('--epochs', type=int, default=50,
+                        help='Train Epochs')
+    parser.add_argument('--reg_lambda', type=float, default=2.0, help='View Learner Edge Perturb Regularization Strength')
+
+    parser.add_argument('--seed', type=int, default=0)
+
+    parser.add_argument('--num', type=int, default=1000,
+                        help='Number of points included in each dataset')
+
+    parser.add_argument('--redo_views', type=bool, default=False,
+                        help='Whether to re-vis views')
+
+    parser.add_argument('--checkpoint', type=str, default="latest", help='Either the name of the trained model checkpoint in ./outputs/, or latest for the most recent trained model in ./wandb/latest-run/files')
+
+    parser.add_argument(
+        '-f',
+        '--node-features',
+        action='store_true',
+        help='Whether to include node features (labels) in evaluation',
+    )
+
+    parser.add_argument(
+        '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
+    )
+
+    return parser.parse_args()
 
 if __name__ == "__main__":
     args = arg_parse()
@@ -289,8 +339,8 @@ if __name__ == "__main__":
     val_datasets = get_val_datasets(my_transforms, 5000)
     val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
 
-    train_datasets = get_train_datasets(my_transforms, 50000)
-    train_datasets = [DataLoader(data, batch_size=64) for data in train_datasets[0]]
+    # train_datasets = get_train_datasets(my_transforms, 50000)
+    # train_datasets = [DataLoader(data, batch_size=64) for data in train_datasets[0]]
 
     # Setup wandb
     setup_wandb(vars(args), offline=False, name="noise-noise")
