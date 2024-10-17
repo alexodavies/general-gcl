@@ -14,6 +14,7 @@ def edge_list_to_text(edge_list, condense = True):
     
     connections = []
     edges = []
+    nodes = [str(node) for node in np.unique(edge_list)]
 
     for edge in edge_list:
         node1, node2 = edge
@@ -26,4 +27,4 @@ def edge_list_to_text(edge_list, condense = True):
 
     
     # Join connections and node info
-    return " ".join(connections)
+    return "nodes: " + ", ".join(nodes) + "edges: " +  ", ".join(connections)
