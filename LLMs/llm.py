@@ -23,7 +23,7 @@ class LLM:
         # Load the model and tokenizer and save them to the external disk
         # try:
 
-        if "chem" in model_name:
+        if "Chem" in model_name:
             self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
             self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
         else:
