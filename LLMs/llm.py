@@ -1,5 +1,5 @@
 import torch
-from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
+from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
 from llm_utils import edge_list_to_text
 import os
 
@@ -12,7 +12,7 @@ import os
 class LLM:
     def __init__(self, 
                  task_prompt="",
-                 model_name="facebook/galactica-1.3b",
+                 model_name="OpenDFM/ChemDFM-13B-v1.0",
                  save_dir="/mnt/external_disk/models"):
         
         # Create directory if it doesn't exist
@@ -22,8 +22,13 @@ class LLM:
         # if model_name != "meta-llama/Meta-Llama-3-8B-Instruct":
         # Load the model and tokenizer and save them to the external disk
         # try:
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir)
+
+        if "chem" in model_name:
+            self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
+            self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir)
         self.model.generation_config.pad_token_id = self.tokenizer.eos_token_id
         # except:
             # self.model = AutoModelForCausalLM.from_pretrained(model_name)
