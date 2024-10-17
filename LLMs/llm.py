@@ -39,11 +39,11 @@ class LLM:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
         self.task_prompt = task_prompt
-        self.extra_prompt_text = "Return a number, with no other text or filler. Produce no other content."
+        self.extra_prompt_text = "Return a number, with no other text or filler. Answer in the format THIS GRAPH HAS X NODES."
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
         print("generating text")
-        completion = self.pipe(user_prompt, max_new_tokens = 250)
+        completion = self.pipe(user_prompt, max_new_tokens = 500)
         return completion# [0]["generated_text"]
 
     def forward(self, graph):
