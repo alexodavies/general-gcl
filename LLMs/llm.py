@@ -39,7 +39,7 @@ class LLM:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
         self.task_prompt = task_prompt
-        self.extra_prompt_text = "Return a number, with no other text or filler. Answer in the format THIS GRAPH HAS X NODES."
+        self.extra_prompt_text = "Return a number, with no other text or filler. Answer in the format THE ANSWER IS X."
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
         print("generating text")
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # data = 
 
     # Initialize the LLM object with task-specific prompt
-    llm = LLM("How many nodes are in this graph?", save_dir=".LLM_Benchmarks")
+    llm = LLM("How many edges are in this graph?", save_dir=".LLM_Benchmarks")
 
     # # Create graph data
     edges = erdos_renyi_graph(5, 0.1)
