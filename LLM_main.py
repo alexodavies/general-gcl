@@ -353,7 +353,7 @@ if __name__ == "__main__":
                          "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          "facebook/galactica-1.3b"]
     
-    dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer. Do they play one or multiple games? Answer 0 for single, 1 for multiple.",
+    dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer. Do they play one or multiple games? Answer as a probability that they play multiple games.",
                          "random":"This is a random graph. What is connection probability between nodes?",
                          "community":"This is a community graph. What is the inter-community connection probability?",
                          "trees":"This is a tree graph. How deep is it?"}
