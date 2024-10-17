@@ -34,7 +34,7 @@ class LLM:
         # self.tokenizer.save_pretrained(save_dir)
     
         # Initialize the pipeline with the loaded model and tokenizer
-        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda")
+        self.pipe = pipeline("text2text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda")
         # else:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
@@ -64,7 +64,7 @@ class LLM:
 
     def produce_prompt(self, edge_list):
         graph_string = edge_list_to_text(edge_list)
-        prompt = f"{self.task_prompt} {self.extra_prompt_text} {graph_string}"
+        prompt = f"question: {self.task_prompt} {self.extra_prompt_text} context: {graph_string}"
         return prompt
 
 if __name__ == "__main__":
