@@ -66,7 +66,7 @@ class LLM:
         return pred
 
     def produce_prompt(self, edge_list):
-        graph_string = edge_list_to_text(edge_list, condense = False)
+        graph_string = edge_list_to_text(edge_list, condense = True)
         prompt = f"question: {self.task_prompt} {self.extra_prompt_text} graph: {graph_string} answer:"
         return prompt
 
