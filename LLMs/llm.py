@@ -43,7 +43,7 @@ class LLM:
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
         print("generating text")
-        completion = self.pipe(user_prompt, return_full_text = False, max_new_tokens = 5)
+        completion = self.pipe(user_prompt, max_new_tokens = 5)
         return completion# [0]["generated_text"]
 
     def forward(self, graph):
