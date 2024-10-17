@@ -372,6 +372,8 @@ if __name__ == "__main__":
             for idata, data in enumerate(tqdm(dataset)):
                 
                 target = data.y
+                if name == "trees":
+                    target = target * data.num_nodes
                 response = llm.forward(data)
 
                 targets.append(target)

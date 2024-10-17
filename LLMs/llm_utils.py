@@ -27,4 +27,4 @@ def edge_list_to_text(edge_list, condense = True):
 
     
     # Join connections and node info
-    return "nodes: " + ", ".join(nodes) + "edges: " +  ", ".join(connections)
+    return "nodes: " + ", ".join(nodes) + " edges: " +  ", ".join(connections)
