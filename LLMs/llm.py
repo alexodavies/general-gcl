@@ -12,7 +12,7 @@ import os
 class LLM:
     def __init__(self, 
                  task_prompt="",
-                 model_name="facebook/galactica-30b",
+                 model_name="meta-llama/Llama-3.2-3B-Instruct",
                  save_dir="/mnt/external_disk/models"):
         
         # Create directory if it doesn't exist
@@ -33,7 +33,7 @@ class LLM:
         # self.tokenizer.save_pretrained(save_dir)
     
         # Initialize the pipeline with the loaded model and tokenizer
-        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cpu")
+        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda")
         # else:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
