@@ -64,7 +64,7 @@ class LLM:
 
     def produce_prompt(self, edge_list):
         graph_string = edge_list_to_text(edge_list, condense = False)
-        prompt = f"question: {self.task_prompt} {self.extra_prompt_text} graph: {graph_string}"
+        prompt = f"question: {self.task_prompt} {self.extra_prompt_text} graph: {graph_string} answer:"
         return prompt
 
 if __name__ == "__main__":
