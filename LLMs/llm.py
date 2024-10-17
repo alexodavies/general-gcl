@@ -1,6 +1,6 @@
 import torch
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
-from llm_utils import edge_list_to_text
+from LLMs.llm_utils import edge_list_to_text
 import os
 
 
