@@ -4,7 +4,7 @@ def format_features(features, key_list):
     """Helper function to format the features with their corresponding keys."""
     return ", ".join([f"{key}: {value}" for key, value in zip(key_list, features)])
 
-def edge_list_to_text(edge_list):
+def edge_list_to_text(edge_list, condense = True):
     if isinstance(edge_list, list):
         edge_list = np.array(edge_list)
 
@@ -18,7 +18,10 @@ def edge_list_to_text(edge_list):
     for edge in edge_list:
         node1, node2 = edge
         if (node2, node1) not in edges:
-            connections.append(f"Node {node1} is connected to node {node2}.")
+            if condense:
+                connections.append(f"{node1} <-> {node2}")
+            else:
+                connections.append(f"Node {node1} is connected to node {node2}.")
             edges.append((node1, node2))
 
     
