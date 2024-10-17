@@ -48,7 +48,7 @@ class LLM:
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
         completion = self.pipe(user_prompt, max_new_tokens = 500, return_full_text = False)
-        return completion# [0]["generated_text"]
+        return completion[0]["generated_text"]
 
     def forward(self, graph):
         edge_list = graph.edge_index

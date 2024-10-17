@@ -383,6 +383,8 @@ if __name__ == "__main__":
                 elif idata > 100:
                     break
 
+                
+
             with open(f"outputs/{model_name}_{name}_targets_and_responses.txt", "w") as f:
                 for target, response in zip(targets, responses):
                     f.write(f"Target: {target}\n")
