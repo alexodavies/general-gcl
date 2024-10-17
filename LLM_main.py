@@ -25,6 +25,9 @@ from sklearn.metrics import roc_auc_score, mean_squared_error
 
 import os
 
+from LLMs import LLM
+
+
 from utils import get_total_mol_onehot_dims
 # from features_transfer import arg_parse
 atom_feature_dims, bond_feature_dims = get_total_mol_onehot_dims()
@@ -334,10 +337,10 @@ if __name__ == "__main__":
     # Get X_datasets returns (datasets, names of datasets)
     # Train should be 50k samples, val 5k, test 2k
     test_datasets = get_test_datasets(my_transforms, 2000)
-    test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
+    # test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
 
     val_datasets = get_val_datasets(my_transforms, 5000)
-    val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
+    # val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
 
     # train_datasets = get_train_datasets(my_transforms, 50000)
     # train_datasets = [DataLoader(data, batch_size=64) for data in train_datasets[0]]
@@ -346,8 +349,38 @@ if __name__ == "__main__":
     setup_wandb(vars(args), offline=False, name="LLM-ToP")
 
     
-    model_names =        ["meta-llama/Llama-3.2-3B-Instruct",
+    model_names = ["meta-llama/Llama-3.2-3B-Instruct",
                          "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          "facebook/galactica-1.3b"]
+    
+    dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer. Do they play one or multiple games? Answer 0 for single, 1 for multiple.",
+                         "random":"This is a random graph. What is connection probability between nodes?",
+                         "community":"This is a community graph. What is the inter-community connection probability?",
+                         "trees":"This is a tree graph. How deep is it?"}
+
+    for model_name in model_names:
+        
+
+        for (name, dataset) in test_datasets:
+
+            if name not in ["twitch_egos", "random", "community", "trees"]:
+                continue
+            targets = []
+            responses = []
+            llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
+            for data in dataset:
+                
+                target = data.y
+                response = llm.forward(data)
+
+                targets.append(target)
+                responses.append(response)
+
+            with open(f"outputs/{model_name}_{name}_targets_and_responses.txt", "w") as f:
+                for target, response in zip(targets, responses):
+                    f.write(f"Target: {target}\n")
+                    f.write(f"Response: {response}\n\n")
+
+
 
 

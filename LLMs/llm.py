@@ -13,7 +13,7 @@ class LLM:
     def __init__(self, 
                  task_prompt="",
                  model_name="OpenDFM/ChemDFM-13B-v1.0",
-                 save_dir="/mnt/external_disk/models"):
+                 save_dir=".LLM_Benchmarks"):
         
         # Create directory if it doesn't exist
         if not os.path.exists(save_dir):
@@ -54,7 +54,6 @@ class LLM:
     def forward(self, graph):
         edge_list = graph.edge_index
         prompt = self.produce_prompt(edge_list)
-        print(prompt)
         # try:
             # Chat models
         pred = self.generate_text(prompt)
