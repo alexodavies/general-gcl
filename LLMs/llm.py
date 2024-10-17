@@ -39,7 +39,7 @@ class LLM:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
         self.task_prompt = task_prompt
-        self.extra_prompt_text = "" # Return a number, with no other text or filler, and no linebreaks. Produce no other content."
+        self.extra_prompt_text = "Return a number, with no other text or filler, and no linebreaks. Produce no other content."
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
         print("generating text")
