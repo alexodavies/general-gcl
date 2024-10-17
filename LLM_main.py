@@ -336,10 +336,10 @@ if __name__ == "__main__":
 
     # Get X_datasets returns (datasets, names of datasets)
     # Train should be 50k samples, val 5k, test 2k
-    test_datasets = get_test_datasets(my_transforms, 2000)
+    test_datasets, names = get_test_datasets(my_transforms, 2000)
     # test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
 
-    val_datasets = get_val_datasets(my_transforms, 5000)
+    # val_datasets = get_val_datasets(my_transforms, 5000)
     # val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
 
     # train_datasets = get_train_datasets(my_transforms, 50000)
@@ -361,7 +361,8 @@ if __name__ == "__main__":
     for model_name in model_names:
         
 
-        for (name, dataset) in test_datasets:
+        for idataset, dataset in enumerate(test_datasets):
+            name = names[idataset]
 
             if name not in ["twitch_egos", "random", "community", "trees"]:
                 continue
