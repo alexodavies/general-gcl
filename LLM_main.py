@@ -377,8 +377,10 @@ if __name__ == "__main__":
                 targets.append(target)
                 responses.append(response)
 
-                if idata % 50 == 0:
-                    print(target, response)
+                if idata % 5 == 0:
+                    print(target)
+                    print(llm.produce_prompt(data.edge_index))
+                    print(response)
 
                 elif idata > 100:
                     break
