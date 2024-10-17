@@ -24,6 +24,7 @@ class LLM:
         # try:
         self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir)
+        self.model.generation_config.pad_token_id = self.tokenizer.eos_token_id
         # except:
             # self.model = AutoModelForCausalLM.from_pretrained(model_name)
             # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -70,20 +71,32 @@ if __name__ == "__main__":
     from torch_geometric.utils.random import erdos_renyi_graph
     from torch_geometric.utils import to_undirected
 
+    
+
     # # Example edge list tensor for graph
     # edge_index = torch.tensor([[0, 1, 1, 2],
     #                            [1, 0, 2, 1]], dtype=torch.long)
+
+
+    # data = 
+
+    # Initialize the LLM object with task-specific prompt
+    llm = LLM("What is the density of this graph?", save_dir=".LLM_Benchmarks")
+
+    # # Create graph data
+    edges = erdos_renyi_graph(5, 0.1)
+    edges = to_undirected(edges)
+    data = Data(edge_index=edges)
+    print(data.num_edges)
+    pred = llm.forward(data)
+    print(pred)
+
 
     # # Create graph data
     edges = erdos_renyi_graph(15, 0.1)
     edges = to_undirected(edges)
     data = Data(edge_index=edges)
     print(data.num_edges)
-    # data = 
-
-    # Initialize the LLM object with task-specific prompt
-    llm = LLM("What is the density of this graph?", save_dir=".LLM_Benchmarks")
-
     # Forward pass to predict the answer based on graph input
     pred = llm.forward(data)
     print(pred)
