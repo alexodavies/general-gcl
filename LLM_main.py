@@ -356,7 +356,7 @@ if __name__ == "__main__":
     dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer. Do they play one or multiple games? Answer as a probability that they play multiple games.",
                          "random":"This is a random graph. What is connection probability between nodes?",
                          "community":"This is a community graph. What is the inter-community connection probability?",
-                         "trees":"This is a tree graph. How deep is it?"}
+                         "trees":"This is a tree graph. How deep is it, normalised (divided) by the number of nodes?"}
 
     for model_name in model_names:
         
@@ -372,8 +372,6 @@ if __name__ == "__main__":
             for idata, data in enumerate(tqdm(dataset)):
                 
                 target = data.y
-                if name == "trees":
-                    target = target * data.num_nodes
                 response = llm.forward(data)
 
                 targets.append(target)
