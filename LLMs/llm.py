@@ -12,7 +12,7 @@ import os
 class LLM:
     def __init__(self, 
                  task_prompt="",
-                 model_name="meta-llama/Llama-3.2-3B-Instruct",
+                 model_name="facebook/galactica-1.3b",
                  save_dir="/mnt/external_disk/models"):
         
         # Create directory if it doesn't exist

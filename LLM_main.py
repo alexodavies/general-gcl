@@ -343,6 +343,11 @@ if __name__ == "__main__":
     # train_datasets = [DataLoader(data, batch_size=64) for data in train_datasets[0]]
 
     # Setup wandb
-    setup_wandb(vars(args), offline=False, name="noise-noise")
+    setup_wandb(vars(args), offline=False, name="LLM-ToP")
+
+    
+    model_names =        ["meta-llama/Llama-3.2-3B-Instruct",
+                         "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
+                         "facebook/galactica-1.3b"]
 
 
