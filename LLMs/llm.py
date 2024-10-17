@@ -39,7 +39,7 @@ class LLM:
         # self.tokenizer.save_pretrained(save_dir)
     
         # Initialize the pipeline with the loaded model and tokenizer
-        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda")
+        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda" if "Chem" not in model_name else "cpu")
         # else:
         #     print("Using pipeline")
         #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
