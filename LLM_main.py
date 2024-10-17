@@ -369,13 +369,19 @@ if __name__ == "__main__":
             targets = []
             responses = []
             llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
-            for data in dataset:
+            for idata, data in enumerate(tqdm(dataset)):
                 
                 target = data.y
                 response = llm.forward(data)
 
                 targets.append(target)
                 responses.append(response)
+
+                if idata % 50 == 0:
+                    print(target, response)
+
+                elif idata > 100:
+                    break
 
             with open(f"outputs/{model_name}_{name}_targets_and_responses.txt", "w") as f:
                 for target, response in zip(targets, responses):

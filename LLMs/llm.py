@@ -47,7 +47,6 @@ class LLM:
         self.extra_prompt_text = "Return a number, with no other text or filler. Do not explain your working. Answer in the format THE ANSWER IS X."
 
     def generate_text(self, user_prompt, system_prompt="You are a helpful assistant."):
-        print("generating text")
         completion = self.pipe(user_prompt, max_new_tokens = 500, return_full_text = False)
         return completion# [0]["generated_text"]
 
