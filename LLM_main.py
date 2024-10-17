@@ -384,8 +384,8 @@ if __name__ == "__main__":
                     break
 
                 
-            model_name = model_name.split("/")[-1]
-            with open(f"outputs/{model_name}_{name}_targets_and_responses.txt", "w") as f:
+            model_name_string = model_name.split("/")[-1]
+            with open(f"outputs/{model_name_string}_{name}_targets_and_responses.txt", "w") as f:
                 for target, response in zip(targets, responses):
                     f.write(f"Target: {target}\n")
                     f.write(f"Response: {response}\n\n")
