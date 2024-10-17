@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # data = 
 
     # Initialize the LLM object with task-specific prompt
-    llm = LLM("What is the density of this graph?", save_dir=".LLM_Benchmarks")
+    llm = LLM("How many nodes are in this graph?", save_dir=".LLM_Benchmarks")
 
     # # Create graph data
     edges = erdos_renyi_graph(5, 0.1)
