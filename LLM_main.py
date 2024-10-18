@@ -412,11 +412,11 @@ if __name__ == "__main__":
         llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt["twitch_egos"])
         for idataset, dataset_loader in enumerate(test_datasets):
             name = names[idataset]
-            llm.task_prompt = dataset_to_prompt[name]
+
 
             if name not in dataset_to_prompt:
                 continue
-
+            llm.task_prompt = dataset_to_prompt[name]
             targets = []
             responses = []
 
