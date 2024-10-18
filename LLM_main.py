@@ -442,6 +442,8 @@ if __name__ == "__main__":
                     f.write(f"Target: {target}\n")
                     f.write(f"Response: {response}\n\n")
 
+            responses = [tidy_llm_response(response) for response in responses]
+
             wandb.log({f"{model_name_string}/{name}/Targets":targets,
                        f"{model_name_string}/{name}/Responses":responses,
                        f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses),})
