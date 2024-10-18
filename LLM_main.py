@@ -409,6 +409,7 @@ if __name__ == "__main__":
                          "trees":"This is a tree graph. How deep is it, normalised (divided) by the number of nodes?"}
 
     for model_name in model_names:
+        llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
         for idataset, dataset_loader in enumerate(test_datasets):
             name = names[idataset]
 
@@ -418,7 +419,7 @@ if __name__ == "__main__":
             targets = []
             responses = []
 
-            llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
+            
 
             for idata, batch in enumerate(tqdm(dataset_loader)):
                 # print((idata, batch, batch.y))
@@ -443,10 +444,14 @@ if __name__ == "__main__":
                     f.write(f"Response: {response}\n\n")
 
             responses = [tidy_llm_response(response) for response in responses]
-
-            wandb.log({f"{model_name_string}/{name}/Targets":targets,
-                       f"{model_name_string}/{name}/Responses":responses,
-                       f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses),})
+            if "egos" not in name:
+                wandb.log({f"{model_name_string}/{name}/Targets":targets,
+                        f"{model_name_string}/{name}/Responses":responses,
+                        f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses),})
+            else:
+                wandb.log({f"{model_name_string}/{name}/Targets":targets,
+                        f"{model_name_string}/{name}/Responses":responses,
+                        f"{name}/{model_name_string}-ROC":roc_auc_score(targets, responses),})
 
             
 
