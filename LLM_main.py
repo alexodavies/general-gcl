@@ -341,6 +341,7 @@ def tidy_llm_response(response):
     response = response.split("\n")
     answer = None
     for line in response:
+        print(line)
         if "Answer:" in line:
             # If there is more than one decimal place, that means two numbers in the line, so take only the first
             if len([char for char in line if char == "."]) >= 1:
