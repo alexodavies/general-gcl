@@ -19,7 +19,7 @@ class LLM:
         # Create directory if it doesn't exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-
+        self.model_name = model_name
         # bnb_config = BitsAndBytesConfig(load_in_4bit=True)
         if "Chem" in model_name:
             self.tokenizer = LlamaTokenizer.from_pretrained(model_name, device_map="auto")
@@ -51,6 +51,8 @@ class LLM:
     def produce_prompt(self, edge_list):
         graph_string = edge_list_to_text(edge_list, condense = True)
         prompt = f"question: {self.task_prompt} {self.extra_prompt_text} graph: {graph_string} answer:"
+        if "gala" in self.model_name:
+            prompt = f"question: {self.task_prompt} {self.extra_prompt_text} graph: {graph_string} answer: [START_REF]"
         return prompt
 
 if __name__ == "__main__":
