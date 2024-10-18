@@ -31,7 +31,7 @@ class LLM:
 
     
         # Initialize the pipeline with the loaded model and tokenizer
-        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer, device = "cuda" if "Chem" not in model_name else "cpu")
+        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer, device = "cuda" if "ama" in model_name else "cpu")
         self.task_prompt = task_prompt
         self.extra_prompt_text = "Return a number, with no other text or filler. Do not explain your working. Answer in the format THE ANSWER IS X."
 
