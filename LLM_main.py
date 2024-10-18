@@ -426,8 +426,8 @@ if __name__ == "__main__":
                 target = batch.y  # Move the targets to the same device as the model
                 response = llm.forward(batch)  # Ensure that forward handles batch processing
                 
-                targets.extend(batch.y)  # Move to CPU and store
-                responses.extend(response)
+                targets.append(batch.y)  # Move to CPU and store
+                responses.append(response)
 
                 if idata % 5 == 0:
                     print(target)
