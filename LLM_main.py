@@ -442,7 +442,14 @@ if __name__ == "__main__":
                     f.write(f"Target: {target}\n")
                     f.write(f"Response: {response}\n\n")
 
+            targets = np.array(targets)
             responses = [tidy_llm_response(response) for response in responses]
+            responses = np.array(responses)
+
+            missing_inds = np.where(responses != None)
+            targets = targets[missing_inds]
+            responses = responses[missing_inds]
+            
             if "egos" not in name:
                 wandb.log({f"{model_name_string}/{name}/Targets":targets,
                         f"{model_name_string}/{name}/Responses":responses,
