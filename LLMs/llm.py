@@ -23,9 +23,9 @@ class LLM:
         bnb_config = BitsAndBytesConfig(load_in_4bit=True)
         if "Chem" in model_name:
             self.tokenizer = LlamaTokenizer.from_pretrained(model_name, device_map="auto")
-            self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto", quantization_config=bnb_config)
+            self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto", quantization_config=bnb_config, load_in_8bit = True)
         else:
-            self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir, device_map="auto", quantization_config=bnb_config)
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir, device_map="auto", quantization_config=bnb_config, load_in_8bit = True)
             self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir, device_map="auto")
         self.model.generation_config.pad_token_id = self.tokenizer.eos_token_id
 

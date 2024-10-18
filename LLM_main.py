@@ -387,7 +387,7 @@ if __name__ == "__main__":
     # Get X_datasets returns (datasets, names of datasets)
     # Train should be 50k samples, val 5k, test 2k
     test_datasets, names = get_test_datasets(my_transforms, 2000)
-    test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets]
+    # test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets]
 
     # val_datasets = get_val_datasets(my_transforms, 5000)
     # val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
@@ -399,8 +399,9 @@ if __name__ == "__main__":
     setup_wandb(vars(args), offline=False, name="LLM-ToP")
 
     
-    model_names = ["facebook/galactica-6.7b",
-                   "meta-llama/Llama-3.1-8B-Instruct",
+    model_names = ["facebook/galactica-1.3b",
+                   "meta-llama/Llama-3.2-3B-Instruct",
+
                          "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          ]
     
