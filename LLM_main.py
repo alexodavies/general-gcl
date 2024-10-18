@@ -409,9 +409,10 @@ if __name__ == "__main__":
                          "trees":"This is a tree graph. How deep is it, normalised (divided) by the number of nodes?"}
 
     for model_name in model_names:
-        llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
+        llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt["twitch_egos"])
         for idataset, dataset_loader in enumerate(test_datasets):
             name = names[idataset]
+            llm.task_prompt = dataset_to_prompt[name]
 
             if name not in dataset_to_prompt:
                 continue
