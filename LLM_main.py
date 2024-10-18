@@ -337,7 +337,7 @@ if __name__ == "__main__":
     # Get X_datasets returns (datasets, names of datasets)
     # Train should be 50k samples, val 5k, test 2k
     test_datasets, names = get_test_datasets(my_transforms, 2000)
-    # test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets[0]]
+    test_datasets = [DataLoader(data, batch_size=64) for data in test_datasets]
 
     # val_datasets = get_val_datasets(my_transforms, 5000)
     # val_datasets = [DataLoader(data, batch_size=64) for data in val_datasets[0]]
@@ -359,38 +359,31 @@ if __name__ == "__main__":
                          "trees":"This is a tree graph. How deep is it, normalised (divided) by the number of nodes?"}
 
     for model_name in model_names:
-        
-
-        for idataset, dataset in enumerate(test_datasets):
+        for idataset, dataset_loader in enumerate(test_datasets):
             name = names[idataset]
 
-            if name not in ["twitch_egos", "random", "community", "trees"]:
+            if name not in dataset_to_prompt:
                 continue
+
             targets = []
             responses = []
-            llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
-            for idata, data in enumerate(tqdm(dataset)):
-                
-                target = data.y
-                response = llm.forward(data)
 
-                targets.append(target)
-                responses.append(response)
+            llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
+
+            for idata, batch in enumerate(tqdm(dataset_loader)):
+                target = batch.y.to(device)  # Move the targets to the same device as the model
+                response = llm.forward(batch)  # Ensure that forward handles batch processing
+                
+                targets.extend(target.cpu().numpy())  # Move to CPU and store
+                responses.extend(response)
 
                 if idata % 5 == 0:
                     print(target)
-                    print(llm.produce_prompt(data.edge_index))
+                    print(llm.produce_prompt(batch.edge_index))
                     print(response)
 
-                elif idata > 100:
+                if idata > 100:
                     break
-
-                
-            model_name_string = model_name.split("/")[-1]
-            with open(f"outputs/{model_name_string}_{name}_targets_and_responses.txt", "w") as f:
-                for target, response in zip(targets, responses):
-                    f.write(f"Target: {target}\n")
-                    f.write(f"Response: {response}\n\n")
 
 
 

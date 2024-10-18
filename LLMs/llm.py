@@ -1,5 +1,6 @@
 import torch
 from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
+from transformers import BitsAndBytesConfig
 from LLMs.llm_utils import edge_list_to_text
 import os
 
@@ -18,31 +19,19 @@ class LLM:
         # Create directory if it doesn't exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-        
-        # if model_name != "meta-llama/Meta-Llama-3-8B-Instruct":
-        # Load the model and tokenizer and save them to the external disk
-        # try:
 
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
         if "Chem" in model_name:
-            self.tokenizer = LlamaTokenizer.from_pretrained(model_name)
-            self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
+            self.tokenizer = LlamaTokenizer.from_pretrained(model_name, device_map="auto")
+            self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto", quantization_config=bnb_config)
         else:
-            self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir)
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir = save_dir, device_map="auto", quantization_config=bnb_config)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir = save_dir, device_map="auto")
         self.model.generation_config.pad_token_id = self.tokenizer.eos_token_id
-        # except:
-            # self.model = AutoModelForCausalLM.from_pretrained(model_name)
-            # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        
-        # # Save the model and tokenizer to the specified directory
-        # self.model.save_pretrained(save_dir)
-        # self.tokenizer.save_pretrained(save_dir)
+
     
         # Initialize the pipeline with the loaded model and tokenizer
-        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer,  device = "cuda" if "Chem" not in model_name else "cpu")
-        # else:
-        #     print("Using pipeline")
-        #     self.pipe = pipeline("text-generation", model="meta-llama/Meta-Llama-3-8B-Instruct", device = "cpu")
+        self.pipe = pipeline("text-generation", model=model_name, tokenizer = self.tokenizer)
         self.task_prompt = task_prompt
         self.extra_prompt_text = "Return a number, with no other text or filler. Do not explain your working. Answer in the format THE ANSWER IS X."
 
@@ -56,13 +45,7 @@ class LLM:
         # try:
             # Chat models
         pred = self.generate_text(prompt)
-        # except:
-        #     # Galactica
-        #     prompt = self.tokenizer(prompt + "[START REF]", return_tensors="pt").input_ids
-        #     pred = self.model.generate(prompt, max_length=1000)
-        #     print(pred)
-        #     pred = self.tokenizer.decode(pred[0])
-        #     # print(pred)
+
         return pred
 
     def produce_prompt(self, edge_list):
@@ -76,14 +59,6 @@ if __name__ == "__main__":
     from torch_geometric.utils.random import erdos_renyi_graph
     from torch_geometric.utils import to_undirected
 
-    
-
-    # # Example edge list tensor for graph
-    # edge_index = torch.tensor([[0, 1, 1, 2],
-    #                            [1, 0, 2, 1]], dtype=torch.long)
-
-
-    # data = 
 
     # Initialize the LLM object with task-specific prompt
     llm = LLM("How many edges are in this graph?", save_dir=".LLM_Benchmarks")
