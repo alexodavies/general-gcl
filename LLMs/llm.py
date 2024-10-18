@@ -20,7 +20,7 @@ class LLM:
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        bnb_config = BitsAndBytesConfig(load_in_4bit=True)
         if "Chem" in model_name:
             self.tokenizer = LlamaTokenizer.from_pretrained(model_name, device_map="auto")
             self.model = LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto", quantization_config=bnb_config)
