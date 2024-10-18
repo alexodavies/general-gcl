@@ -349,9 +349,10 @@ if __name__ == "__main__":
     setup_wandb(vars(args), offline=False, name="LLM-ToP")
 
     
-    model_names = ["meta-llama/Llama-3.1-8B-Instruct",
+    model_names = ["facebook/galactica-6.7b",
+                   "meta-llama/Llama-3.1-8B-Instruct",
                          "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
-                         "facebook/galactica-6.7b"]
+                         ]
     
     dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer. Do they play one or multiple games? Answer as a probability that they play multiple games.",
                          "random":"This is a random graph. What is connection probability between nodes?",
