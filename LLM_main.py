@@ -341,7 +341,6 @@ def tidy_llm_response(response):
     response = response.split("\n")
     answer = None
     for line in response:
-        print(line)
         line = line.upper()
         if "ANSWER" in line:
             # If there is more than one decimal place, that means two numbers in the line, so take only the first
@@ -380,7 +379,7 @@ if __name__ == "__main__":
     print(test_string, f"Answer: {tidy_llm_response(test_string)}")
     test_string = "0.375."
     print(test_string, f"Answer: {tidy_llm_response(test_string)}")
-    quit()
+    # quit()
 
     # Load the dataset
     my_transforms = Compose([initialize_edge_weight])
@@ -442,6 +441,10 @@ if __name__ == "__main__":
                 for target, response in zip(targets, responses):
                     f.write(f"Target: {target}\n")
                     f.write(f"Response: {response}\n\n")
+
+            wandb.log({f"{model_name_string}/{name}/Targets":targets,
+                       f"{model_name_string}/{name}/Responses":responses,
+                       f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses),})
 
             
 
