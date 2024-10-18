@@ -430,13 +430,11 @@ if __name__ == "__main__":
                 targets.append(batch.y)  # Move to CPU and store
                 responses.append(response)
 
-                if idata % 5 == 0:
+                if idata % 50 == 0:
                     print(target)
                     print(llm.produce_prompt(batch.edge_index))
                     print(response)
 
-                if idata > 2:
-                    break
 
             model_name_string = model_name.split("/")[-1]
             with open(f"outputs/{model_name_string}_{name}_targets_and_responses.txt", "w") as f:
