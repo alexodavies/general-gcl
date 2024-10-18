@@ -422,11 +422,11 @@ if __name__ == "__main__":
             llm = LLM(model_name=model_name, task_prompt=dataset_to_prompt[name])
 
             for idata, batch in enumerate(tqdm(dataset_loader)):
-                print((idata, batch))
-                target = batch.y.to(device)  # Move the targets to the same device as the model
+                # print((idata, batch, batch.y))
+                target = batch.y  # Move the targets to the same device as the model
                 response = llm.forward(batch)  # Ensure that forward handles batch processing
                 
-                targets.extend(target.cpu().numpy())  # Move to CPU and store
+                targets.extend(batch.y)  # Move to CPU and store
                 responses.extend(response)
 
                 if idata % 5 == 0:
