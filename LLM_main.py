@@ -446,7 +446,7 @@ if __name__ == "__main__":
             if "egos" not in name:
                 wandb.log({f"{model_name_string}/{name}/Targets":targets,
                         f"{model_name_string}/{name}/Responses":responses,
-                        f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses),})
+                        f"{name}/{model_name_string}-MSE":mean_squared_error(targets, responses, squared=False),})
             else:
                 wandb.log({f"{model_name_string}/{name}/Targets":targets,
                         f"{model_name_string}/{name}/Responses":responses,
