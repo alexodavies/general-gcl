@@ -327,9 +327,47 @@ def arg_parse():
 
     return parser.parse_args()
 
+def tidy_llm_response(response):
+    """
+    Extracts the response from LLM output, despite odd formatting.
+
+    Args:
+        response (str): The response from the LLM.
+
+    Returns:
+        float: The extracted response.
+    """
+
+    response = response.split("\n")
+    answer = None
+    for line in response:
+        if "Answer:" in line:
+            # If there is more than one decimal place, that means two numbers in the line, so take only the first
+            if len([char for char in line if char == "."]) >= 1:
+                line = line.split(".")[0] + "." + line.split(".")[1]
+            # Find number in line, allowing for decimals
+            answer = float("".join([char for char in line if char.isdigit() or char == "."]))
+            
+            
+            break
+
+    # Check if answer > 1, if so, divide by 100
+    if answer is not None and answer > 1:
+        answer /= 100
+
+    return answer
+
+
+
 if __name__ == "__main__":
     args = arg_parse()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    test_string = "0.0163 THE ANSWER IS 0.0163."
+    print(test_string, f"Answer: {tidy_llm_response(test_string)}")
+    test_string = "0.375."
+    print(test_string, f"Answer: {tidy_llm_response(test_string)}")
+    quit()
 
     # Load the dataset
     my_transforms = Compose([initialize_edge_weight])
@@ -383,8 +421,16 @@ if __name__ == "__main__":
                     print(llm.produce_prompt(batch.edge_index))
                     print(response)
 
-                if idata > 100:
+                if idata > 2:
                     break
+
+            model_name_string = model_name.split("/")[-1]
+            with open(f"outputs/{model_name_string}_{name}_targets_and_responses.txt", "w") as f:
+                for target, response in zip(targets, responses):
+                    f.write(f"Target: {target}\n")
+                    f.write(f"Response: {response}\n\n")
+
+            
 
 
 
