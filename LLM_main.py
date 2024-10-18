@@ -401,7 +401,6 @@ if __name__ == "__main__":
     
     model_names = ["facebook/galactica-1.3b",
                    "meta-llama/Llama-3.2-3B-Instruct",
-
                          "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          ]
     
