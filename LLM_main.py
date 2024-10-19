@@ -337,37 +337,39 @@ def tidy_llm_response(response):
     Returns:
         float: The extracted response.
     """
-
-    response = response.split("\n")
-    answer = None
-    for line in response:
-        line = line.upper()
-        if "ANSWER" in line:
-            # If there is more than one decimal place, that means two numbers in the line, so take only the first
-            if len([char for char in line if char == "."]) >= 1:
-                line = line.split(".")[0] + "." + line.split(".")[1]
-            # Find number in line, allowing for decimals
-            answer = float("".join([char for char in line if char.isdigit() or char == "."]))
-            
-            break
-    
-    # LLM didn't ever say "answer", so assume it just produced a number
-    if answer is None:
+    try:
+        response = response.split("\n")
+        answer = None
         for line in response:
-            
-            # If there is more than one decimal place, that means two numbers in the line, so take only the first
-            if len([char for char in line if char == "."]) >= 1:
-                line = line.split(".")[0] + "." + line.split(".")[1]
-            # Find number in line, allowing for decimals
-            answer = float("".join([char for char in line if char.isdigit() or char == "."]))
-            
-            break
+            line = line.upper()
+            if "ANSWER" in line:
+                # If there is more than one decimal place, that means two numbers in the line, so take only the first
+                if len([char for char in line if char == "."]) >= 1:
+                    line = line.split(".")[0] + "." + line.split(".")[1]
+                # Find number in line, allowing for decimals
+                answer = float("".join([char for char in line if char.isdigit() or char == "."]))
+                
+                break
+        
+        # LLM didn't ever say "answer", so assume it just produced a number
+        if answer is None:
+            for line in response:
+                
+                # If there is more than one decimal place, that means two numbers in the line, so take only the first
+                if len([char for char in line if char == "."]) >= 1:
+                    line = line.split(".")[0] + "." + line.split(".")[1]
+                # Find number in line, allowing for decimals
+                answer = float("".join([char for char in line if char.isdigit() or char == "."]))
+                
+                break
 
-    # Check if answer > 1, if so, divide by 100
-    if answer is not None and answer > 1:
-        answer /= 100
+        # Check if answer > 1, if so, divide by 100
+        if answer is not None and answer > 1:
+            answer /= 100
 
-    return answer
+        return answer
+    except:
+        return None
 
 
 
