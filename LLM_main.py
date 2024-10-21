@@ -371,6 +371,25 @@ def tidy_llm_response(response):
     except:
         return None
 
+def dodgy_value_check(value):
+    val = float(value)
+    val = value * 10
+    assert value >= 0., "val < 0"
+
+def catch_dodgy_values(array1, array2):
+    new_array1 = []
+    new_array2 = []
+
+    for val1, val2 in zip(array1, array2):
+        try:
+            dodgy_value_check(val1)
+            dodgy_value_check(val2)
+            new_array1.append(val1)
+            new_array2.append(val2)
+        except:
+            continue
+
+    return np.array(new_array1), np.array(new_array2)
 
 
 if __name__ == "__main__":
@@ -401,8 +420,7 @@ if __name__ == "__main__":
     setup_wandb(vars(args), offline=False, name="LLM-ToP")
 
     
-    model_names = ["meta-llama/Llama-3.2-3B-Instruct",
-                         "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
+    model_names = ["OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          ]
     
     dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer, with other nodes being other twitch streamers. Do they play one or multiple games? Answer as a probability that they play multiple games.",
@@ -451,6 +469,8 @@ if __name__ == "__main__":
             missing_inds = np.where(responses != None)
             targets = targets[missing_inds]
             responses = responses[missing_inds]
+
+            targets, responses = catch_dodgy_values(targets, responses)
             
             if "egos" not in name:
                 wandb.log({f"{model_name_string}/{name}/Targets":targets,
