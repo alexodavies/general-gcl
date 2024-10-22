@@ -35,7 +35,7 @@ from torch_geometric.transforms import Compose
 from tqdm import tqdm
 
 from utils import setup_wandb, wandb_cfg_to_actual_cfg, get_total_mol_onehot_dims, visualize_grid_with_labels
-from datasets.loaders import get_val_loaders, get_test_loaders, get_test_datasets, get_train_loaders, get_train_datasets, get_val_datasets
+from datasets.loaders import get_val_loaders, get_test_loaders, get_test_datasets, get_train_loaders, get_train_datasets, get_val_datasets, get_chemical_datasets
 
 
 from sklearn.metrics import roc_auc_score, mean_squared_error
@@ -536,7 +536,8 @@ def run_centroid_graph_visualisation(args):
 
     # Get datasets
     my_transforms = Compose([initialize_edge_weight])
-    val_datasets, names = get_val_datasets(my_transforms, num = num)
+    # val_datasets, names = get_val_datasets(my_transforms, num = num)
+    val_datasets, names = get_chemical_datasets(my_transforms, num = num, stage="val")
     # for dataset in val_datasets:
 
         # for ig, g in enumerate(dataset):
