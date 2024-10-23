@@ -374,7 +374,7 @@ def tidy_llm_response(response):
 def dodgy_value_check(value):
     val = float(value)
     val = value * 10
-    assert value >= 0., "val < 0"
+    assert value >= 0. and value <= 1., "val < 0 or val > 1"    
 
 def catch_dodgy_values(array1, array2):
     new_array1 = []
@@ -420,7 +420,7 @@ if __name__ == "__main__":
     setup_wandb(vars(args), offline=False, name="LLM-ToP")
 
     
-    model_names = ["OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
+    model_names = [ "openai/gpt", # "OpenDFM/ChemDFM-13B-v1.0", # This requires the llama tokenizer (annoying)
                          ]
     
     dataset_to_prompt = {"twitch_egos":"This is the ego network of a twitch streamer, with other nodes being other twitch streamers. Do they play one or multiple games? Answer as a probability that they play multiple games.",
