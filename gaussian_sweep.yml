@@ -1,0 +1,29 @@
+program: train.py  # Replace with your training script filename
+method: random  # Random search strategy
+metric:
+  name: "Model Loss"  # Replace with your target metric
+  goal: minimize
+parameters:
+  model_lr:
+    distribution: uniform
+    min: 0.0001
+    max: 0.01
+  view_lr:
+    distribution: uniform
+    min: 0.0001
+    max: 0.01
+  drop_ratio:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  reg_lambda:
+    distribution: uniform
+    min: 0.001
+    max: 5.0
+  gaussian_reg_strength:
+    distribution: uniform
+    min: 0.001
+    max: 2.0
+  gaussian_regularisation:
+    distribution: categorical
+    values: [true]  # Indicate presence or absence of the flag

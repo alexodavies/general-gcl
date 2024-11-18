@@ -169,6 +169,118 @@ def train_epoch_random_nodes(dataloader,
 
     return model_loss_all, -1., -1.
 
+def train_epoch_adgcl_regularised(dataloader,
+                      model, model_optimizer,
+                      view_learner, view_optimizer,
+                      model_loss_all, view_loss_all, reg_all,
+                      reg_strength = 0.2):
+    """
+    single train epoch for encoder and view learner
+
+    Args:
+        dataloader: dataloader (see get_train_loader)
+        model: encoder
+        model_optimizer: optimizer for model
+        view_learner: view learner
+        view_optimizer: optimizer for view learner
+        model_loss_all: stores losses for each batch
+        view_loss_all: stores view losses for each batch
+        reg_all: stores regularization losses for each batch
+
+    Returns:
+        model_loss_all: loss for epoch
+        view_loss_all: view loss for epoch
+        reg_all: regularization loss for epoch
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if model.encoder.convolution  == GPSConv:
+        print("Model is GPSConv")
+
+    
+    for batch in tqdm(dataloader, leave = False):
+        # set up
+        batch = batch.to(device)
+
+        # train view to maximize contrastive loss
+        view_learner.train()
+        view_learner.zero_grad()
+        model.eval()
+
+        x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
+
+        edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
+
+        temperature = 1.0
+        bias = 0.0 + 0.0001  # If bias is 0, we run into problems
+        eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
+        gate_inputs = torch.log(eps) - torch.log(1 - eps)
+        gate_inputs = gate_inputs.to(device)
+        gate_inputs = (gate_inputs + edge_logits) / temperature
+        batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze()
+
+        x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
+
+        # regularization
+
+        row, col = batch.edge_index
+        edge_batch = batch.batch[row]
+        edge_drop_out_prob = 1 - batch_aug_edge_weight
+
+        uni, edge_batch_num = edge_batch.unique(return_counts=True)
+        sum_pe = scatter(edge_drop_out_prob, edge_batch, reduce="sum")
+
+        reg = []
+        for b_id in range(args.batch_size):
+            if b_id in uni:
+                num_edges = edge_batch_num[uni.tolist().index(b_id)]
+                reg.append(sum_pe[b_id] / num_edges)
+            else:
+                # means no edges in that graph. So don't include.
+                pass
+        num_graph_with_edges = len(reg)
+        reg = torch.stack(reg)
+        reg = reg.mean()
+
+        view_loss = model.calc_loss(x, x_aug) - (args.reg_lambda * reg)
+        view_loss_all += view_loss.item() * batch.num_graphs
+        reg_all += reg.item()
+        # gradient ascent formulation
+        (-view_loss).backward()
+        view_optimizer.step()
+
+        # train (model) to minimize contrastive loss
+        model.train()
+        view_learner.eval()
+        model.zero_grad()
+
+        x, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, None)
+        edge_logits = view_learner(batch.batch, batch.x, batch.edge_index, batch.edge_attr)
+        temperature = 1.0
+        bias = 0.0 + 0.0001  # If bias is 0, we run into problems
+        eps = (bias - (1 - bias)) * torch.rand(edge_logits.size()) + (1 - bias)
+        gate_inputs = torch.log(eps) - torch.log(1 - eps)
+        gate_inputs = gate_inputs.to(device)
+        gate_inputs = (gate_inputs + edge_logits) / temperature
+        batch_aug_edge_weight = torch.sigmoid(gate_inputs).squeeze().detach()
+
+        x_aug, _ = model(batch.batch, batch.x, batch.edge_index, batch.edge_attr, batch_aug_edge_weight)
+
+        model_loss = model.calc_loss(x, x_aug, reg_strength = reg_strength)
+        model_loss_all += model_loss.item() * batch.num_graphs
+
+        # standard gradient descent formulation
+        model_loss.backward()
+        model_optimizer.step()
+
+        if model.encoder.convolution  == GPSConv:
+        		# if self.convolution:
+            model.encoder.redraw_projection.redraw_projections()
+
+        batch.to("cpu")
+
+    return model_loss_all, view_loss_all, reg_all
+
 def train_epoch_adgcl(dataloader,
                       model, model_optimizer,
                       view_learner, view_optimizer,
@@ -376,7 +488,16 @@ def run(args):
 
 
         if not random_dropping:
-            model_loss_all, view_loss_all, reg_all = train_epoch_adgcl(dataloader,
+            if args.gaussian_regularisation:
+                model_loss_all, view_loss_all, reg_all = train_epoch_adgcl_regularised(dataloader,
+                                                                       model, model_optimizer,
+                                                                       view_learner, view_optimizer,
+                                                                       model_loss_all, view_loss_all, reg_all,
+                                                                       reg_strength=args.gaussian_reg_strength)
+            else:
+
+
+                model_loss_all, view_loss_all, reg_all = train_epoch_adgcl(dataloader,
                                                                        model, model_optimizer,
                                                                        view_learner, view_optimizer,
                                                                        model_loss_all, view_loss_all, reg_all)
@@ -499,6 +620,11 @@ def arg_parse():
         '--gaussian-regularisation',
         action='store_true',
         help='Whether to use gaussian regularisation during pre-training',
+    )
+
+    parser.add_argument(
+        '--gaussian_reg_strength', type=float, default=0.2,
+        help='Weighting constant for gaussian regularisation. Ignored if gaussian regularisation is not used.',
     )
 
     parser.add_argument(
