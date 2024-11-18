@@ -27,7 +27,7 @@ from tqdm import tqdm
 from datasets.loaders import get_train_loader, get_val_loaders, get_test_loaders
 from unsupervised.embedding_evaluation import GeneralEmbeddingEvaluation
 from unsupervised.encoder import Encoder
-from unsupervised.learning import GInfoMinMax
+from unsupervised.learning import GInfoMinMax, GaussianGInfoMinMax
 from unsupervised.utils import initialize_edge_weight
 from unsupervised.view_learner import ViewLearner
 from utils import setup_wandb
@@ -332,10 +332,15 @@ def run(args):
 
     val_loaders, names = get_val_loaders(args.batch_size, my_transforms)
     test_loaders, names = get_test_loaders(args.batch_size, my_transforms)
-
-    # View learner and encoder use the same basic architecture
-    model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
+    if args.gaussian_regularisation:
+        print("Using AD-GCL with Gaussian Regularisation")
+        model = GaussianGInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
                         proj_hidden_dim=args.proj_dim).to(device)
+    else:
+        print("Using AD-GCL without Gaussian Regularisation")
+        # View learner and encoder use the same basic architecture
+        model = GInfoMinMax(Encoder(emb_dim=args.emb_dim, num_gc_layers=args.num_gc_layers, drop_ratio=args.drop_ratio, pooling_type=args.pooling_type, convolution=args.backbone),
+                            proj_hidden_dim=args.proj_dim).to(device)
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.model_lr)
 
     summarize_model(model)
@@ -488,6 +493,12 @@ def arg_parse():
 
     parser.add_argument(
         '--backbone', type = str, default='gin', help = 'Model backbone to use (gin, gcn, gat)'
+    )
+
+    parser.add_argument(
+        '--gaussian-regularisation',
+        action='store_true',
+        help='Whether to use gaussian regularisation during pre-training',
     )
 
     parser.add_argument(
