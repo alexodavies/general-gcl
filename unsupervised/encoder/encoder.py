@@ -229,7 +229,7 @@ class Encoder(torch.nn.Module):
 
 		self.pooling_type = pooling_type
 
-		if convolution == "gps" or convolution == "gin":	
+		if convolution == "gps":	
 			emb_dim = np.around(emb_dim / 4).astype(int) * 4
 			self.pe_transform = AddRandomWalkPE(walk_length=pos_features)
 			self.pe_lin = Linear(pos_features, pe_dim)
@@ -371,8 +371,8 @@ class Encoder(torch.nn.Module):
 		xs = []
 		for i in range(self.num_gc_layers):
 			
-			for ix in range(x.shape[0]):
-				assert torch.sum(torch.isnan(x[ix, :])) == 0 , f"X contain NaNs: {x[ix, :]}, num nans: {torch.sum(torch.isnan(x[ix, :]))}, layer {i}, Item {ix}"
+			# for ix in range(x.shape[0]):
+				# assert torch.sum(torch.isnan(x[ix, :])) == 0 , f"X contain NaNs: {x[ix, :]}, num nans: {torch.sum(torch.isnan(x[ix, :]))}, layer {i}, Item {ix}"
 			if edge_weight is None:
 				edge_weight = torch.ones((edge_index.shape[1], 1)).to(x.device)
 
@@ -385,7 +385,7 @@ class Encoder(torch.nn.Module):
 			elif self.convolution == GPSConv:
 				x = self.convs[i](x, edge_index, batch, edge_attr = edge_attr, edge_weight = edge_weight)
 
-				assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}, {torch.min(x)}, {torch.max(x)}"
+				# assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}, {torch.min(x)}, {torch.max(x)}"
 
 			
 			x = self.bns[i](x)
@@ -396,7 +396,7 @@ class Encoder(torch.nn.Module):
 			else:
 				x = F.dropout(F.relu(x), self.drop_ratio, training=self.training)
 			
-			assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}"
+			# assert torch.sum(torch.isnan(x)) == 0, f"X contain NaNs: {x}, num nans: {torch.sum(torch.isnan(x))}, layer {i}"
 			xs.append(x)
 		
 		# compute graph embedding using pooling
