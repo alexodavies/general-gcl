@@ -277,7 +277,7 @@ def train_epoch_adgcl_regularised(dataloader,
         		# if self.convolution:
             model.encoder.redraw_projection.redraw_projections()
 
-        batch.to("cpu")
+        # batch.to("cpu")
 
     return model_loss_all, view_loss_all, reg_all
 
