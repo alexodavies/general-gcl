@@ -617,7 +617,7 @@ def arg_parse():
     )
 
     parser.add_argument(
-        '--gaussian-regularisation',
+        '--gaussian_regularisation',
         action='store_true',
         help='Whether to use gaussian regularisation during pre-training',
     )

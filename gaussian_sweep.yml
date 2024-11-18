@@ -1,4 +1,8 @@
 program: train.py  # Replace with your training script filename
+command: 
+- python
+- train.py
+- ${args_no_boolean_flags}
 method: random  # Random search strategy
 metric:
   name: "Model Loss"  # Replace with your target metric
