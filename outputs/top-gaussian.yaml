@@ -1,0 +1,103 @@
+wandb_version: 1
+
+model_lr:
+  desc: null
+  value: 0.001
+view_lr:
+  desc: null
+  value: 0.001
+num_gc_layers:
+  desc: null
+  value: 6
+pooling_type:
+  desc: null
+  value: standard
+emb_dim:
+  desc: null
+  value: 300
+proj_dim:
+  desc: null
+  value: 300
+mlp_edge_model_dim:
+  desc: null
+  value: 64
+batch_size:
+  desc: null
+  value: 512
+drop_ratio:
+  desc: null
+  value: 0.2
+epochs:
+  desc: null
+  value: 101
+reg_lambda:
+  desc: null
+  value: 2.0
+node_features:
+  desc: null
+  value: false
+no_molecules:
+  desc: null
+  value: false
+no_socials:
+  desc: null
+  value: false
+random_edge_views:
+  desc: null
+  value: false
+random_node_views:
+  desc: null
+  value: false
+dropped:
+  desc: null
+  value: 0.2
+backbone:
+  desc: null
+  value: gin
+gaussian_regularisation:
+  desc: null
+  value: true
+gaussian_reg_strength:
+  desc: null
+  value: 1.1369485868121425
+exclude:
+  desc: null
+  value: None
+seed:
+  desc: null
+  value: 0
+_wandb:
+  desc: null
+  value:
+    python_version: 3.11.9
+    cli_version: 0.17.9
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1732127380
+    t:
+      1:
+      - 1
+      - 5
+      - 51
+      - 53
+      - 55
+      - 77
+      2:
+      - 1
+      - 5
+      - 51
+      - 53
+      - 55
+      - 77
+      3:
+      - 3
+      - 13
+      - 16
+      - 23
+      - 37
+      4: 3.11.9
+      5: 0.17.9
+      8:
+      - 5
+      13: linux-x86_64
